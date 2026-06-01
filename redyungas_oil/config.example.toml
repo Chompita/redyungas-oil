@@ -65,6 +65,15 @@ bitrate = 192                 # kbps del MP3 grabado
 send_to_jarvis = false        # entregar cada segmento a JARVIS para transcripción
 
 # ---------------------------------------------------------------------------
+# Auto-actualización desde el repo privado (git pull). La esclava se despliega
+# como clon git con credenciales cacheadas; no hace falta token en el software.
+# ---------------------------------------------------------------------------
+[update]
+enabled = true
+branch = "master"
+check_on_start = true         # avisar al arrancar si hay una versión nueva
+
+# ---------------------------------------------------------------------------
 # Control por IA (Model Context Protocol). En producción bind a IP Tailscale.
 # ---------------------------------------------------------------------------
 [mcp]

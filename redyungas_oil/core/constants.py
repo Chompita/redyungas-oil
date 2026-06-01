@@ -128,6 +128,8 @@ MENUS = {
         ("Contenidos...", "F1", "help.contents"),
         ("Sugerencia del día", None, "help.tip"),
         ("-", None, None),
+        ("Buscar actualizaciones...", None, "help.update"),
+        ("-", None, None),
         ("Acerca de REDYUNGAS OIL", None, "help.about"),
     ],
 }

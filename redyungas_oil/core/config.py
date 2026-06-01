@@ -88,6 +88,11 @@ DEFAULTS: dict[str, Any] = {
         "bitrate": 192,
         "send_to_jarvis": False,
     },
+    "update": {
+        "enabled": True,             # auto-actualización desde el repo privado
+        "branch": "master",
+        "check_on_start": True,      # avisar al arrancar si hay versión nueva
+    },
     "mcp": {
         "enabled": False,
         "host": "127.0.0.1",         # en producción: IP Tailscale 100.x

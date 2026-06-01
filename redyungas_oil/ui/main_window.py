@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self._setup_mentions()
         self._setup_mcp()
         self._setup_stream()
+        self._setup_update()
 
     # ------------------------------------------------------------------ menús
     def _build_menus(self) -> None:
@@ -553,6 +554,9 @@ class MainWindow(QMainWindow):
         if action_id == "ryo.mentions":
             self._open_mentions()
             return
+        if action_id == "help.update":
+            self._check_updates(manual=True)
+            return
         if action_id == "help.about":
             QMessageBox.about(
                 self, f"Acerca de {C.APP_NAME}",
@@ -618,6 +622,48 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Servidor MCP activo en el puerto {port}", 5000)
         except Exception as exc:  # nunca impedir que arranque la app
             self.statusBar().showMessage(f"MCP no disponible: {exc}", 6000)
+
+    # ------------------------------------------------- auto-actualización
+    def _setup_update(self) -> None:
+        self.updater = None
+        up = (self.config.get("update", {}) or {})
+        if not up.get("enabled", True):
+            return
+        from ..core.updater import Updater
+        self.updater = Updater(self.config, self)
+        self.updater.checked.connect(self._on_update_checked)
+        self.updater.applied.connect(self._on_update_applied)
+        if up.get("check_on_start", True):
+            QTimer.singleShot(4000, lambda: self._check_updates(manual=False))
+
+    def _check_updates(self, manual: bool = True) -> None:
+        if self.updater is None:
+            from ..core.updater import Updater
+            self.updater = Updater(self.config, self)
+            self.updater.checked.connect(self._on_update_checked)
+            self.updater.applied.connect(self._on_update_applied)
+        self._update_manual = manual
+        self.statusBar().showMessage("Buscando actualizaciones…", 3000)
+        self.updater.check_async()
+
+    def _on_update_checked(self, remote: str, has_update: bool, message: str) -> None:
+        self.statusBar().showMessage(message, 6000)
+        if has_update:
+            resp = QMessageBox.question(
+                self, "Actualización disponible",
+                f"{message}\n\n¿Descargar e instalar ahora (git pull)?\n"
+                "Tendrás que reiniciar la aplicación al terminar.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if resp == QMessageBox.StandardButton.Yes:
+                self.updater.apply_async()
+        elif getattr(self, "_update_manual", False):
+            QMessageBox.information(self, "Actualizaciones", message)
+
+    def _on_update_applied(self, ok: bool, message: str) -> None:
+        self.statusBar().showMessage(message, 8000)
+        icon = QMessageBox.information if ok else QMessageBox.warning
+        icon(self, "Actualización", message)
 
     # ------------------------------------------------- emisor "PUERTO" (stream)
     def _setup_stream(self) -> None:
