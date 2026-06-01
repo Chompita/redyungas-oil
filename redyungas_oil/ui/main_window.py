@@ -277,8 +277,22 @@ class MainWindow(QMainWindow):
         sb.addPermanentWidget(self._sb_time)
 
     # --------------------------------------------------------------- motor
+    def _make_engine(self):
+        """Crea el motor de audio según `[audio].engine` (sounddevice | vlc)."""
+        name = ((self.config.get("audio", {}) or {}).get("engine", "vlc") or "vlc").lower()
+        if name == "sounddevice":
+            try:
+                from ..audio.engine_sd import SoundDeviceEngine
+                eng = SoundDeviceEngine(self.config, model=self.playlist.model, parent=self)
+                self.statusBar().showMessage("Motor de audio: sounddevice (un solo grafo)", 4000)
+                return eng
+            except Exception as exc:   # si falta numpy/sounddevice, caer a VLC sin romper
+                self.statusBar().showMessage(
+                    f"Motor sounddevice no disponible ({exc}); usando VLC", 6000)
+        return AudioEngine(self.config, model=self.playlist.model, parent=self)
+
     def _setup_engine(self) -> None:
-        self.engine = AudioEngine(self.config, model=self.playlist.model, parent=self)
+        self.engine = self._make_engine()
         self._ends_anchor: float | None = None   # ancla de la hora "Acaba a las"
 
         # Señales del motor -> UI

@@ -12,6 +12,12 @@ PyQt6
 #      en Windows: runtime oficial de VLC (se incluye en el empaquetado).
 python-vlc
 
+# --- Motor de audio "audio-pro" (un solo grafo, mezcla en numpy, sin tartamudeo) ---
+# sounddevice requiere PortAudio: en Linux `sudo apt install libportaudio2`;
+# en Windows el wheel de pip ya trae PortAudio. ffmpeg decodifica las pistas a PCM.
+numpy
+sounddevice
+
 # --- Servidor de control para agentes de IA (Model Context Protocol) ---
 mcp
 

@@ -55,9 +55,14 @@ DEFAULTS: dict[str, Any] = {
         "ffprobe": "",               # ruta a ffprobe (vacío = autodetectar/PATH)
     },
     "audio": {
+        # Motor de audio: "sounddevice" (un solo grafo, mezcla en numpy, sin tartamudeo
+        # al solapar) o "vlc" (el clásico). En la rama audio-pro por defecto sounddevice.
+        "engine": "sounddevice",
         "crossfade_ms": C.CROSSFADE_MS,
         "fade_in_ms": C.FADE_IN_MS,  # fundido de entrada al Reproducir/click derecho (0 = sin fundido)
         "duck_ms": C.DUCK_MS,        # rapidez del pisador (bajar/subir música suave)
+        "samplerate": 44100,
+        "blocksize": 1024,           # tamaño de bloque del motor sounddevice (latencia/estabilidad)
         "output_device": "",         # "" = dispositivo por defecto del SO
     },
     "network": {
