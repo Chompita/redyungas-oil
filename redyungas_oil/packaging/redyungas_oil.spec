@@ -16,6 +16,8 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_dynamic_libs
+
 ROOT = os.path.abspath(os.path.join(SPECPATH, "..", ".."))     # .../RED YUNGAS OIL
 PKG = os.path.join(ROOT, "redyungas_oil")
 
@@ -25,7 +27,8 @@ datas = [
     (os.path.join(PKG, "resources", "branding"), "redyungas_oil/resources/branding"),
     (os.path.join(PKG, "config.example.toml"), "redyungas_oil"),
 ]
-binaries = []
+# La DLL de PortAudio que necesita sounddevice (motor de audio de un solo grafo).
+binaries = collect_dynamic_libs("sounddevice")
 
 # --- Runtime de libVLC (solo Windows) ---
 def _find_vlc():
@@ -53,6 +56,7 @@ if sys.platform.startswith("win"):
 
 hiddenimports = [
     "vlc",
+    "numpy", "sounddevice", "_sounddevice",   # motor de audio de un solo grafo
     "uvicorn", "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols",
     "anyio", "starlette",
 ]

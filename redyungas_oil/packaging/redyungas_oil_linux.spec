@@ -24,6 +24,7 @@ datas = [
 
 hiddenimports = [
     "vlc",
+    "numpy", "sounddevice", "_sounddevice",   # motor de audio de un solo grafo
     "uvicorn", "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols",
     "anyio", "starlette",
 ]

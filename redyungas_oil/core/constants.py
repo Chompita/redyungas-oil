@@ -12,7 +12,7 @@ from __future__ import annotations
 # Identidad / branding  (el "disfraz" cambia ZaraRadio -> REDYUNGAS OIL)
 # ---------------------------------------------------------------------------
 APP_NAME = "REDYUNGAS OIL"
-APP_VERSION = "1.3.0"           # v1.3 — audio sin cortes (crossfade equal-power+pre-roll, pisador/fade-in suaves), sin ventanas de consola en Windows, "Acaba a las" estable, splash con logo
+APP_VERSION = "1.4.0"           # v1.4 — motor de audio de UN SOLO GRAFO (sounddevice+numpy) por defecto: crossfade/solape sin tartamudeo, pisador/fade sample-accurate, VU real. (v1.3: equal-power VLC, sin ventanas consola, splash)
 APP_TITLE_DEFAULT = "Sin título 1"   # equivalente a "SinTítulo1" de ZaraRadio
 ORG_NAME = "Red Yungas"
 
