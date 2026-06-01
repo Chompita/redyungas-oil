@@ -19,6 +19,7 @@ try:                          # Python 3.11+ trae tomllib nativo
     import tomllib
 except ModuleNotFoundError:   # Python 3.10 (p. ej. esclavas): respaldo con tomli
     import tomli as tomllib
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -27,9 +28,15 @@ import tomli_w
 
 from . import constants as C
 
-# Ubicación por defecto del config del usuario (junto al proyecto).
+# Ubicación del config del usuario:
+#  - app empaquetada (.exe PyInstaller): JUNTO al ejecutable (config.toml al lado del .exe).
+#  - desarrollo: junto al proyecto ".../RED YUNGAS OIL/config.toml".
 PROJECT_ROOT = Path(__file__).resolve().parents[2]   # .../RED YUNGAS OIL
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.toml"
+if getattr(sys, "frozen", False):                    # congelado por PyInstaller
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = PROJECT_ROOT
+DEFAULT_CONFIG_PATH = BASE_DIR / "config.toml"
 EXAMPLE_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.example.toml"
 
 # Valores por defecto (espejo de config.example.toml; única fuente de defaults).

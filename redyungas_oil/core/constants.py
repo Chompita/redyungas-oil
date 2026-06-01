@@ -12,7 +12,7 @@ from __future__ import annotations
 # Identidad / branding  (el "disfraz" cambia ZaraRadio -> REDYUNGAS OIL)
 # ---------------------------------------------------------------------------
 APP_NAME = "REDYUNGAS OIL"
-APP_VERSION = "1.1.0"           # v1.1 — panel emisor "PUERTO" (estilo Opticodec) + auto-update
+APP_VERSION = "1.1.1"           # v1.1.1 — sintonizador "Recibir señal" + config junto al .exe
 APP_TITLE_DEFAULT = "Sin título 1"   # equivalente a "SinTítulo1" de ZaraRadio
 ORG_NAME = "Red Yungas"
 
@@ -107,6 +107,8 @@ MENUS = {
         ("Siguiente", "N", "media.next"),
         ("Pisador", "T", "media.voiceover"),
         ("Parar tras la actual", "B", "media.stop_after"),
+        ("-", None, None),
+        ("Recibir señal...", "R", "media.tune"),
         ("-", None, None),
         ("Renombrar", "F2", "media.rename"),
     ],

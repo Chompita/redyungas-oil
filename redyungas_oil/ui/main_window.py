@@ -152,6 +152,7 @@ class MainWindow(QMainWindow):
         self._record_btn.clicked.connect(lambda: self._on_action("ryo.record"))
         tb.addWidget(self._record_btn)
         add_btn("📝", "ryo.mentions", "Menciones (REDYUNGAS OIL)")
+        add_btn("📻", "media.tune", "Recibir señal (escuchar un stream)")
         add_btn("❓", "help.contents", "Ayuda")
 
         spacer = QWidget()
@@ -554,6 +555,9 @@ class MainWindow(QMainWindow):
         if action_id == "ryo.mentions":
             self._open_mentions()
             return
+        if action_id == "media.tune":
+            self._open_tuner()
+            return
         if action_id == "help.update":
             self._check_updates(manual=True)
             return
@@ -604,6 +608,15 @@ class MainWindow(QMainWindow):
         self.mentions_window.show()
         self.mentions_window.raise_()
         self.mentions_window.activateWindow()
+
+    def _open_tuner(self) -> None:
+        """Sintonizador manual: escuchar un stream sin cambiar de perfil ni reiniciar."""
+        from .widgets.tuner_window import TunerWindow
+        if getattr(self, "_tuner", None) is None:
+            self._tuner = TunerWindow(self.config, self)
+        self._tuner.show()
+        self._tuner.raise_()
+        self._tuner.activateWindow()
 
     # ------------------------------------------------------------- MCP (IA)
     def _setup_mcp(self) -> None:
