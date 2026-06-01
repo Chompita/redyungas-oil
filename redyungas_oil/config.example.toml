@@ -16,7 +16,9 @@ recordings_folder = "/home/redyungas/RED YUNGAS OIL/grabaciones"
 logs_folder = "/home/redyungas/RED YUNGAS OIL/logs"
 
 [audio]
-crossfade_ms = 3000           # duración del fundido entre pistas
+crossfade_ms = 3000           # duración del fundido (cruce) entre pistas
+fade_in_ms = 350              # fundido de entrada suave al Reproducir / click derecho (0 = desactivado)
+duck_ms = 450                 # rapidez del pisador: bajar/subir la música de forma suave (no de golpe)
 output_device = ""            # "" = dispositivo de salida por defecto del SO
 
 [network]

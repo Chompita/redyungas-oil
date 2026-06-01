@@ -24,6 +24,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from ..core import proc
 from .capture import resolve_input
 
 log = logging.getLogger("redyungas_oil.encoder")
@@ -85,8 +86,8 @@ class IcecastEncoder(QObject):
         try:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             logf = open(self._log_path, "ab")
-            self._proc = subprocess.Popen(self.build_cmd(), stdout=subprocess.DEVNULL,
-                                          stderr=logf)
+            self._proc = proc.popen(self.build_cmd(), stdout=subprocess.DEVNULL,
+                                    stderr=logf)
             log.info("Encoder ffmpeg PID %s -> %s:%s%s",
                      self._proc.pid, self.host, self.port, self.mount)
             self.state_changed.emit("emitting")

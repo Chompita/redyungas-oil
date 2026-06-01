@@ -24,12 +24,14 @@ import threading
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from ..core import proc
 from .capture import resolve_input
 
 log = logging.getLogger("redyungas_oil.meter")
 
 FLOOR_DB = -120.0
 _CHECK_MS = 4000
+_CHECK_MAX_MS = 30000   # tope del backoff cuando el medidor no logra arrancar
 
 
 def _parse_db(value: str) -> float:
@@ -59,6 +61,7 @@ class StreamMeter(QObject):
         self._proc: subprocess.Popen | None = None
         self._reader: threading.Thread | None = None
         self._want_running = False
+        self._fail_count = 0
         self._watch = QTimer(self)
         self._watch.timeout.connect(self._check)
 
@@ -78,6 +81,7 @@ class StreamMeter(QObject):
         if self._want_running:
             return
         self._want_running = True
+        self._fail_count = 0
         self._spawn()
         self._watch.start(_CHECK_MS)
 
@@ -94,7 +98,7 @@ class StreamMeter(QObject):
         if self.is_running():
             return
         try:
-            self._proc = subprocess.Popen(
+            self._proc = proc.popen(
                 self.build_cmd(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 text=True, bufsize=1,
             )
@@ -148,9 +152,17 @@ class StreamMeter(QObject):
     def _check(self) -> None:
         if not self._want_running:
             return
-        if not self.is_running():
-            log.debug("Medidor caído; reintentando")
-            self._spawn()
+        if self.is_running():
+            if self._fail_count:
+                self._fail_count = 0
+                self._watch.start(_CHECK_MS)     # vuelve al ritmo normal
+            return
+        # No logra arrancar (p. ej. dispositivo de captura inexistente): se reintenta
+        # cada vez más espaciado para NO martillar ffmpeg en bucle.
+        self._fail_count += 1
+        log.debug("Medidor caído; reintento %s", self._fail_count)
+        self._watch.start(min(_CHECK_MAX_MS, _CHECK_MS * self._fail_count))
+        self._spawn()
 
     def _kill(self) -> None:
         if self._proc and self._proc.poll() is None:

@@ -40,6 +40,7 @@ from urllib.request import urlopen
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from ..core import proc
 from .capture import resolve_input
 
 log = logging.getLogger("redyungas_oil.stream")
@@ -197,8 +198,8 @@ class StreamEncoder(QObject):
         return open(self._log_path, "ab")
 
     def _spawn_icecast(self) -> None:
-        self._proc = subprocess.Popen(self.build_cmd(), stdout=subprocess.DEVNULL,
-                                      stderr=self._open_log())
+        self._proc = proc.popen(self.build_cmd(), stdout=subprocess.DEVNULL,
+                                stderr=self._open_log())
         log.info("Emisor Icecast ffmpeg PID %s -> %s%s", self._proc.pid,
                  self.public_url(), self.mount)
 
@@ -223,8 +224,8 @@ class StreamEncoder(QObject):
         sock.settimeout(None)
         self._sock = sock
         # 2) ffmpeg -> MP3/ADTS a stdout (pipe:1).
-        self._proc = subprocess.Popen(self._ffmpeg_base() + ["pipe:1"],
-                                      stdout=subprocess.PIPE, stderr=self._open_log())
+        self._proc = proc.popen(self._ffmpeg_base() + ["pipe:1"],
+                                stdout=subprocess.PIPE, stderr=self._open_log())
         # 3) Hilo que bombea ffmpeg -> socket.
         self._pump_alive = True
         self._pump = threading.Thread(target=self._pump_loop,

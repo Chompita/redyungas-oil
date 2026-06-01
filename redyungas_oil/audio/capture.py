@@ -12,8 +12,9 @@ Fuente (config [network].capture_device):
 
 from __future__ import annotations
 
-import subprocess
 import sys
+
+from ..core import proc
 
 _KNOWN_FORMATS = {"pulse", "alsa", "dshow", "avfoundation", "lavfi"}
 
@@ -28,8 +29,8 @@ def default_format() -> str:
 
 def default_monitor() -> str:
     try:
-        sink = subprocess.run(["pactl", "get-default-sink"],
-                              capture_output=True, text=True, timeout=5).stdout.strip()
+        sink = proc.run(["pactl", "get-default-sink"],
+                        capture_output=True, text=True, timeout=5).stdout.strip()
         return f"{sink}.monitor" if sink else "default"
     except Exception:
         return "default"

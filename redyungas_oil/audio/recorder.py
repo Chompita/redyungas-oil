@@ -22,6 +22,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from ..core import proc
 from .capture import resolve_input
 
 log = logging.getLogger("redyungas_oil.recorder")
@@ -71,7 +72,7 @@ class Recorder(QObject):
         ]
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
         logf = open(self._log_path, "ab")
-        self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=logf)
+        self._proc = proc.popen(cmd, stdout=subprocess.DEVNULL, stderr=logf)
         log.info("Grabando (segmentos de %s s) en %s", self.segment_seconds, self.folder)
         self._watch.start(_WATCH_MS)
         self.state_changed.emit("recording")

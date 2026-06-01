@@ -20,10 +20,12 @@ import os
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QApplication, QStyleFactory
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPixmap
+from PyQt6.QtWidgets import QApplication, QSplashScreen, QStyleFactory
 
 from .core import constants as C
+from .core.branding import logo_path
 from .core.config import load_config
 from .core.logging_setup import setup_logging
 
@@ -41,6 +43,43 @@ def _apply_style(app: QApplication) -> None:
     qss = Path(__file__).resolve().parent / "ui" / "style" / "win7.qss"
     if qss.exists():
         app.setStyleSheet(qss.read_text(encoding="utf-8"))
+
+
+def _make_splash_pixmap(logo: str | None) -> QPixmap:
+    """Compón la imagen de la pantalla de carga: fondo degradado + logo + textos."""
+    w, h = 620, 380
+    pm = QPixmap(w, h)
+    pm.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+    # Fondo degradado oscuro con borde redondeado.
+    grad = QLinearGradient(0, 0, 0, h)
+    grad.setColorAt(0.0, QColor("#222b38"))
+    grad.setColorAt(1.0, QColor("#10151d"))
+    painter.setBrush(grad)
+    painter.setPen(QColor("#3c4858"))
+    painter.drawRoundedRect(0, 0, w - 1, h - 1, 16, 16)
+
+    # Logo centrado.
+    if logo:
+        src = QPixmap(logo)
+        if not src.isNull():
+            scaled = src.scaledToWidth(440, Qt.TransformationMode.SmoothTransformation)
+            painter.drawPixmap((w - scaled.width()) // 2, 56, scaled)
+
+    # Subtítulo y versión.
+    painter.setPen(QColor("#e8edf3"))
+    painter.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+    painter.drawText(0, h - 92, w, 26, Qt.AlignmentFlag.AlignHCenter,
+                     "Automatización radial con IA")
+    painter.setPen(QColor("#9fb0c4"))
+    painter.setFont(QFont("Arial", 10))
+    painter.drawText(0, h - 64, w, 20, Qt.AlignmentFlag.AlignHCenter,
+                     f"{C.APP_NAME}  ·  v{C.APP_VERSION}")
+    painter.end()
+    return pm
 
 
 def _install_excepthook(logger) -> None:
@@ -65,13 +104,33 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(C.APP_NAME)
     app.setOrganizationName(C.ORG_NAME)
+
+    logo = logo_path()
+    if logo:
+        app.setWindowIcon(QIcon(logo))
     _apply_style(app)
+
+    # Pantalla de carga: aparece DE INMEDIATO para que se vea que el software está
+    # abriendo, aunque la primera arranque (VLC, red, MCP) tarde unos segundos
+    # (antes daba la impresión de que "no se abre"). Se omite en smoke/captura.
+    splash = None
+    if not (os.environ.get("RYO_SMOKE") or os.environ.get("RYO_SHOT")):
+        splash = QSplashScreen(_make_splash_pixmap(logo))
+        splash.show()
+        splash.showMessage("Iniciando…",
+                           Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter,
+                           QColor("#e8edf3"))
+        app.processEvents()
 
     # Import diferido para que el smoke test no falle si faltan widgets de fases futuras.
     from .ui.main_window import MainWindow
 
     window = MainWindow(config)
+    if logo:
+        window.setWindowIcon(QIcon(logo))
     window.show()
+    if splash is not None:
+        splash.finish(window)
 
     if os.environ.get("RYO_SMOKE"):
         # Smoke test: procesa eventos, confirma que la ventana montó y cierra.

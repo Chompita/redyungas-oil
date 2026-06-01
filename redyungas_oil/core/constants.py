@@ -12,7 +12,7 @@ from __future__ import annotations
 # Identidad / branding  (el "disfraz" cambia ZaraRadio -> REDYUNGAS OIL)
 # ---------------------------------------------------------------------------
 APP_NAME = "REDYUNGAS OIL"
-APP_VERSION = "1.2.0"           # v1.2 — fixes audio (silencio/duración/seek), receptor en PUERTO, ganancia ±48, ffmpeg PATH, menú click-derecho, look Fusion cross-platform
+APP_VERSION = "1.3.0"           # v1.3 — audio sin cortes (crossfade equal-power+pre-roll, pisador/fade-in suaves), sin ventanas de consola en Windows, "Acaba a las" estable, splash con logo
 APP_TITLE_DEFAULT = "Sin título 1"   # equivalente a "SinTítulo1" de ZaraRadio
 ORG_NAME = "Red Yungas"
 
@@ -162,3 +162,6 @@ RECONNECT_TIMEOUT_S = 15         # reintento de reconexión al caer la señal
 SILENCE_TIMEOUT_S = 7            # silencio antes de saltar a emergencia
 RECORDING_SEGMENT_S = 1800       # corte de grabación cada 30 minutos
 CROSSFADE_MS = 3000              # duración del fundido por defecto
+FADE_IN_MS = 350                 # fundido de entrada suave al iniciar una pista (Reproducir/click derecho)
+DUCK_MS = 450                    # tiempo del pisador para bajar/subir la música (suave, no de golpe)
+DUCK_LEVEL = 0.30                # nivel al que baja la música con el pisador (0.0..1.0)

@@ -56,6 +56,8 @@ DEFAULTS: dict[str, Any] = {
     },
     "audio": {
         "crossfade_ms": C.CROSSFADE_MS,
+        "fade_in_ms": C.FADE_IN_MS,  # fundido de entrada al Reproducir/click derecho (0 = sin fundido)
+        "duck_ms": C.DUCK_MS,        # rapidez del pisador (bajar/subir música suave)
         "output_device": "",         # "" = dispositivo por defecto del SO
     },
     "network": {

@@ -9,15 +9,16 @@ la UI).
 from __future__ import annotations
 
 import json
-import subprocess
 
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
+
+from ..core import proc
 
 
 def probe_duration(path: str) -> float:
     """Duración en segundos vía ffprobe; 0.0 si falla."""
     try:
-        out = subprocess.run(
+        out = proc.run(
             ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
              "-of", "json", path],
             capture_output=True, text=True, timeout=20,

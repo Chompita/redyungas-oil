@@ -15,10 +15,11 @@ Si no hay ninguna vía disponible, devuelve None y el motor lo omite con aviso.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
+
+from ..core import proc
 
 
 def _tts_tool() -> str | None:
@@ -31,12 +32,12 @@ def _tts_tool() -> str | None:
 def _synth(text: str, out_path: str, tool: str, lang: str = "es") -> bool:
     try:
         if tool in ("espeak-ng", "espeak"):
-            subprocess.run([tool, "-v", lang, "-s", "150", "-w", out_path, text],
-                           check=True, capture_output=True, timeout=15)
+            proc.run([tool, "-v", lang, "-s", "150", "-w", out_path, text],
+                     check=True, capture_output=True, timeout=15)
             return True
         if tool == "pico2wave":
-            subprocess.run(["pico2wave", "-l", "es-ES", "-w", out_path, text],
-                           check=True, capture_output=True, timeout=15)
+            proc.run(["pico2wave", "-l", "es-ES", "-w", out_path, text],
+                     check=True, capture_output=True, timeout=15)
             return True
     except Exception:
         return False

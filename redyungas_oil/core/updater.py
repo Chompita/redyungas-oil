@@ -23,13 +23,13 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
 import threading
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from . import constants as C
+from . import proc
 
 log = logging.getLogger("redyungas_oil.updater")
 
@@ -51,8 +51,8 @@ def is_newer(remote: str, local: str) -> bool:
 
 def _git(args: list[str], cwd: Path = REPO_ROOT, timeout: int = 30) -> tuple[int, str]:
     try:
-        p = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True,
-                           text=True, timeout=timeout)
+        p = proc.run(["git", "-C", str(cwd), *args], capture_output=True,
+                     text=True, timeout=timeout)
         return p.returncode, (p.stdout + p.stderr).strip()
     except Exception as exc:
         return 1, str(exc)

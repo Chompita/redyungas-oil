@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QDateTime, Qt, QTime, QTimer, QUrl
-from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
+from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 from ..audio.engine import AudioEngine
 from ..audio.recorder import Recorder
 from ..core import constants as C
+from ..core.branding import logo_path
 from ..core.timefmt import fmt_mmss_tenths
 from ..integrations.jarvis_adapter import JarvisAdapter
 from ..integrations.telegram_notifier import TelegramNotifier
@@ -161,9 +162,19 @@ class MainWindow(QMainWindow):
         sec = QLabel("Copia secundaria")
         sec.setObjectName("secondaryCopy")
         tb.addWidget(sec)
-        logo = QLabel("🔴 REDYUNGAS OIL")
-        logo.setObjectName("brandLogo")
-        tb.addWidget(logo)
+        # Marca RED YUNGAS (donde ZaraRadio pone su logo): el logo real si está,
+        # con respaldo a texto si faltara el recurso.
+        brand = QLabel()
+        brand.setObjectName("brandLogo")
+        brand.setContentsMargins(6, 0, 8, 0)
+        lp = logo_path()
+        pm = QPixmap(lp) if lp else QPixmap()
+        if not pm.isNull():
+            brand.setPixmap(pm.scaledToHeight(30, Qt.TransformationMode.SmoothTransformation))
+            brand.setToolTip(C.APP_NAME)
+        else:
+            brand.setText("🔴 REDYUNGAS OIL")
+        tb.addWidget(brand)
 
     # ------------------------------------------------------------- central
     def _build_central(self) -> None:
@@ -268,9 +279,10 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------------------- motor
     def _setup_engine(self) -> None:
         self.engine = AudioEngine(self.config, model=self.playlist.model, parent=self)
+        self._ends_anchor: float | None = None   # ancla de la hora "Acaba a las"
 
         # Señales del motor -> UI
-        self.engine.now_playing_changed.connect(lambda _i, t: self.onair.set_now_playing(t))
+        self.engine.now_playing_changed.connect(self._on_now_playing)
         self.engine.next_changed.connect(lambda _i, t: self.next_panel.set_next(t or "—"))
         self.engine.position_changed.connect(self._on_position)
         self.engine.levels_changed.connect(self.onair.vu.set_levels)
@@ -378,19 +390,33 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(msg.get(health, health), 4000)
 
     # --------------------------------------------------------------- handlers
+    def _on_now_playing(self, _i: int, title: str) -> None:
+        self.onair.set_now_playing(title)
+        self._ends_anchor = None        # re-anclar "Acaba a las" en la nueva pista
+
     def _on_position(self, remaining: float, total: float) -> None:
         self.onair.set_remaining(fmt_mmss_tenths(remaining))
         self._sb_time.setText(fmt_mmss_tenths(remaining))
         self.transport.set_position((total - remaining) / total if total > 0 else 0.0)
         if remaining > 0:
-            ends = QDateTime.currentDateTime().addSecs(int(round(remaining)))
+            # "Acaba a las": se ANCLA la hora de fin absoluta y solo se recalcula si
+            # cambia de verdad (>1.5 s = cambio de pista o seek). Así el indicador no
+            # salta atrás/adelante por el jitter de VLC: se queda fijo en un número.
+            now = QDateTime.currentMSecsSinceEpoch() / 1000.0
+            candidate = now + remaining
+            if self._ends_anchor is None or abs(candidate - self._ends_anchor) > 1.5:
+                self._ends_anchor = candidate
+            ends = QDateTime.fromSecsSinceEpoch(int(round(self._ends_anchor)))
             self.onair.set_ends_at(ends.toString("HH:mm:ss"))
+        else:
+            self._ends_anchor = None
 
     def _on_state(self, state: str) -> None:
         msg = {"playing": "Reproduciendo", "paused": "En pausa", "stopped": "Detenido"}
         self.statusBar().showMessage(msg.get(state, state), 3000)
         if state == "stopped":
             self.onair.set_remaining("00:00.0")
+            self._ends_anchor = None
 
     def _on_volume(self, value: int) -> None:
         self.engine.set_volume(value)
@@ -607,12 +633,18 @@ class MainWindow(QMainWindow):
             self._check_updates(manual=True)
             return
         if action_id == "help.about":
-            QMessageBox.about(
-                self, f"Acerca de {C.APP_NAME}",
-                f"{C.APP_NAME} v{C.APP_VERSION}\n\n"
-                "Automatización radial para Red Yungas.\n"
-                "Clon de ZaraRadio v1.6.2 con backend moderno e IA (MCP).",
-            )
+            box = QMessageBox(self)
+            box.setWindowTitle(f"Acerca de {C.APP_NAME}")
+            box.setTextFormat(Qt.TextFormat.RichText)
+            box.setText(
+                f"<b>{C.APP_NAME}</b> v{C.APP_VERSION}<br><br>"
+                "Automatización radial para Red Yungas.<br>"
+                "Clon de ZaraRadio v1.6.2 con backend moderno e IA (MCP).")
+            lp = logo_path()
+            pm = QPixmap(lp) if lp else QPixmap()
+            if not pm.isNull():
+                box.setIconPixmap(pm.scaledToWidth(220, Qt.TransformationMode.SmoothTransformation))
+            box.exec()
             return
         if action_id == "file.quit":
             self.close()
