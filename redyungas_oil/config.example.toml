@@ -1,0 +1,95 @@
+# ============================================================================
+#  REDYUNGAS OIL — configuración de ejemplo
+#  Copia este archivo a "config.toml" (en la raíz "RED YUNGAS OIL/") y ajústalo.
+#  Si no existe config.toml, el software arranca en modo standalone con defaults.
+# ============================================================================
+
+[general]
+profile = "standalone"        # "estudio" (emite) | "esclava" (recibe+failover) | "standalone"
+station_name = "Red Yungas"
+language = "es"
+
+[paths]
+music_root = "/home/redyungas"            # raíz del árbol de archivos
+emergency_folder = ""                      # carpeta de emergencia (failover por silencio)
+recordings_folder = "/home/redyungas/RED YUNGAS OIL/grabaciones"
+logs_folder = "/home/redyungas/RED YUNGAS OIL/logs"
+
+[audio]
+crossfade_ms = 3000           # duración del fundido entre pistas
+output_device = ""            # "" = dispositivo de salida por defecto del SO
+
+[network]
+# --- Receptor (perfil "esclava"): de dónde se escucha la señal del estudio ---
+stream_url = "http://stream.example.com:8032/"
+reconnect_timeout_s = 15      # reintento de reconexión al caer la señal
+silence_timeout_s = 7         # silencio antes de saltar a emergencia
+stall_seconds = 8             # señal "congelada" antes de declararla caída
+offline_folder = ""           # carpeta de cuñas del protocolo offline (ej. PUBLI H:MM)
+# --- Emisor interno (perfil "estudio"): relé Icecast estudio -> esclavas ---
+icecast_host = "stream.example.com"
+icecast_port = 8032
+icecast_mount = "/live"
+icecast_password = ""         # se rellena en cada despliegue (NO subir a git)
+icecast_bitrate = 128         # kbps del MP3 emitido por el estudio
+capture_device = ""           # "" = auto (monitor del sink); o "pulse:NOMBRE.monitor" / "dshow:audio=Cable Output"
+
+# ---------------------------------------------------------------------------
+# Emisor público "PUERTO" (panel estilo Orban Opticodec-PC). Empuja el bus de
+# programa al SHOUTcast/Icecast público. Se controla desde la pestaña vertical
+# "PUERTO »" del borde derecho (medidor L/R en dB + saturación independiente).
+# ---------------------------------------------------------------------------
+[stream]
+enabled = false
+server_type = "shoutcast"     # "shoutcast" (protocolo v1 nativo) | "icecast" (Icecast2)
+host = "stream.example.com"
+port = 8032
+mount = "/stream"             # solo lo usa Icecast2; SHOUTcast autentica por contraseña
+user = "source"
+password = ""                 # p. ej. ***REMOVED*** — NO subir a git
+bitrate = 128                 # kbps
+codec = "mp3"                 # "mp3" (compatible) | "aac" (LC). HE-AAC pide libfdk_aac.
+sample_rate = 44100
+channels = 2
+gain_db = 0.0                 # ganancia/saturación independiente del volumen de playout
+stream_name = "RED YUNGAS"
+genre = "Various"
+website = "http://www.redyungas.com.bo"
+description = "Hi-Fi Internet Audio"
+connect_on_start = false      # emitir automáticamente al arrancar la app
+
+[recording]
+segment_seconds = 1800        # corte cada 30 minutos
+format = "mp3"
+bitrate = 192                 # kbps del MP3 grabado
+send_to_jarvis = false        # entregar cada segmento a JARVIS para transcripción
+
+# ---------------------------------------------------------------------------
+# Control por IA (Model Context Protocol). En producción bind a IP Tailscale.
+# ---------------------------------------------------------------------------
+[mcp]
+enabled = false
+host = "127.0.0.1"
+port = 8770
+token = ""                    # OBLIGATORIO si enabled=true
+
+[rest]
+enabled = false               # REST interno: menciones, cuñas, health
+host = "127.0.0.1"
+port = 8771
+token = ""
+
+# ---------------------------------------------------------------------------
+# Adaptadores OPCIONALES hacia JARVIS. Vacíos/false = software desacoplado.
+# Rellenarlos NO modifica JARVIS; solo usa sus interfaces públicas.
+# ---------------------------------------------------------------------------
+[telegram]
+enabled = false
+bot_token = ""                # token del bot (p. ej. MARCUS)
+chat_id = ""                  # p. ej. operador ***REMOVED***
+
+[jarvis]
+enabled = false
+delivery_mode = "folder"      # "folder" (carpeta vigilada) | "api" (POST)
+transcription_api = "http://127.0.0.1:9120/api/transcription/jobs"
+watch_folder = ""

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Placeholder de branding REDYUNGAS OIL (reemplaza la marca "ZaraRadio").
+     En la Fase 1 se sustituye por el logo definitivo (PNG/ICO) de Red Yungas. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48" viewBox="0 0 240 48">
+  <rect width="240" height="48" rx="6" fill="#ffffff" stroke="#c0c0c0"/>
+  <circle cx="26" cy="24" r="13" fill="#FF0000"/>
+  <circle cx="26" cy="24" r="6" fill="#ffffff"/>
+  <text x="48" y="22" font-family="Segoe UI, Tahoma, sans-serif" font-size="16"
+        font-weight="bold" fill="#1a1a1a">REDYUNGAS</text>
+  <text x="48" y="40" font-family="Segoe UI, Tahoma, sans-serif" font-size="14"
+        font-weight="bold" fill="#FF0000">OIL</text>
+</svg>

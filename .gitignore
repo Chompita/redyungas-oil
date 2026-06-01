@@ -1,0 +1,23 @@
+# --- Entorno / runtime (NO al repo) ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Secretos / config local del despliegue ---
+config.toml
+*.secret
+.env
+
+# --- Datos de operación ---
+logs/
+*.log
+grabaciones/
+dist/
+build/
+*.spec.bak
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db

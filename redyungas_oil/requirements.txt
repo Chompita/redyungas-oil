@@ -1,0 +1,28 @@
+# ============================================================================
+#  REDYUNGAS OIL — dependencias v1.0
+#  Las versiones reales resueltas en la instalación se congelan en el
+#  checkpoint maestro (CHECKPOINTS/) tras `pip freeze`.
+# ============================================================================
+
+# --- GUI (el "disfraz" estilo ZaraRadio / Windows 7) ---
+PyQt6
+
+# --- Motor de audio: reproducción, recepción de stream y crossfade ---
+# OJO: requiere libvlc del sistema -> en Linux: sudo apt install vlc libvlc-dev
+#      en Windows: runtime oficial de VLC (se incluye en el empaquetado).
+python-vlc
+
+# --- Servidor de control para agentes de IA (Model Context Protocol) ---
+mcp
+
+# --- Cliente HTTP (avisos Telegram MARCUS, entrega a transcripción JARVIS) ---
+httpx
+
+# --- Programador de eventos a hora exacta ---
+APScheduler
+
+# --- Escritura de archivos TOML (la lectura usa tomllib, nativo en 3.11+) ---
+tomli-w
+
+# --- Empaquetado para las esclavas Windows (solo entorno de build) ---
+# pyinstaller   # se instala aparte en la fase de empaquetado (Fase 8)
