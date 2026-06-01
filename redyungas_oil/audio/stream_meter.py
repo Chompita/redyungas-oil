@@ -53,7 +53,8 @@ class StreamMeter(QObject):
         if source_url:                       # medir un stream recibido (URL)
             self._input = ["-i", source_url]
         else:                                # medir el bus de programa (captura)
-            fmt, device = resolve_input(config)
+            cap = (config.get("stream", {}) or {}).get("capture_device") or None
+            fmt, device = resolve_input(config, cap)
             self._input = ["-f", fmt, "-i", device]
         self._proc: subprocess.Popen | None = None
         self._reader: threading.Thread | None = None

@@ -35,8 +35,10 @@ def default_monitor() -> str:
         return "default"
 
 
-def resolve_input(config: dict) -> tuple[str, str]:
-    cap = ((config.get("network", {}) or {}).get("capture_device", "") or "").strip()
+def resolve_input(config: dict, capture: str | None = None) -> tuple[str, str]:
+    """Resuelve (formato, dispositivo) de captura. `capture` (p. ej. el del emisor
+    [stream].capture_device) tiene prioridad sobre [network].capture_device."""
+    cap = (capture or (config.get("network", {}) or {}).get("capture_device", "") or "").strip()
     if cap:
         prefix = cap.split(":", 1)[0]
         if prefix in _KNOWN_FORMATS and ":" in cap:

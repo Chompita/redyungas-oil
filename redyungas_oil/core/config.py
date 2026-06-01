@@ -87,6 +87,7 @@ DEFAULTS: dict[str, Any] = {
         "codec": "mp3",              # mp3 (compatible) | aac (LC). HE-AAC pide libfdk_aac.
         "sample_rate": 44100,
         "channels": 2,
+        "capture_device": "",        # "" = auto. Windows: "dshow:audio=Mezcla estéreo (Realtek(R) Audio)"
         "gain_db": 0.0,              # ganancia/saturación independiente del volumen de playout
         "stream_name": "RED YUNGAS",
         "genre": "Various",

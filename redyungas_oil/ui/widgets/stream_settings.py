@@ -94,6 +94,7 @@ class StreamSettingsDialog(QDialog):
         self._combo(form, "codec", "Códec", ["mp3", "aac"])
         self._line(form, "sample_rate", "Sample rate (Hz)")
         self._line(form, "channels", "Canales (1=mono, 2=estéreo)")
+        self._line(form, "capture_device", "Captura (Windows: dshow:audio=Mezcla estéreo ...)")
 
     def _build_desc(self, form) -> None:
         self._line(form, "stream_name", "Nombre del stream")

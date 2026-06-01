@@ -83,7 +83,7 @@ class StreamEncoder(QObject):
         self.genre = st.get("genre", "Various")
         self.website = st.get("website", "")
         self.description = st.get("description", "")
-        self.fmt, self.device = resolve_input(config)
+        self.fmt, self.device = resolve_input(config, st.get("capture_device") or None)
         logs_folder = (config.get("paths", {}) or {}).get("logs_folder", ".")
         self._log_path = Path(logs_folder) / "stream_ffmpeg.log"
 
