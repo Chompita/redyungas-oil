@@ -21,8 +21,10 @@ httpx
 # --- Programador de eventos a hora exacta ---
 APScheduler
 
-# --- Escritura de archivos TOML (la lectura usa tomllib, nativo en 3.11+) ---
+# --- Lectura/escritura de archivos TOML ---
+# Lectura: tomllib nativo en 3.11+, o respaldo tomli en 3.10 (esclavas Windows).
 tomli-w
+tomli ; python_version < "3.11"
 
 # --- Empaquetado para las esclavas Windows (solo entorno de build) ---
 # pyinstaller   # se instala aparte en la fase de empaquetado (Fase 8)

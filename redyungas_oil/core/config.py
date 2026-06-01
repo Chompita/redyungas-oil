@@ -15,7 +15,10 @@ Punto de entrada: `load_config()` devuelve un dict con los valores efectivos
 
 from __future__ import annotations
 
-import tomllib
+try:                          # Python 3.11+ trae tomllib nativo
+    import tomllib
+except ModuleNotFoundError:   # Python 3.10 (p. ej. esclavas): respaldo con tomli
+    import tomli as tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any

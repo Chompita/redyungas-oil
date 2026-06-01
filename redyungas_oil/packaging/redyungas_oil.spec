@@ -66,7 +66,7 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=[os.path.join(SPECPATH, "rthook_vlc.py")],
     excludes=[],
     cipher=block_cipher,
 )
