@@ -29,11 +29,14 @@ from .core.logging_setup import setup_logging
 
 
 def _apply_style(app: QApplication) -> None:
-    """Aplica el look Windows 7: nativo en Windows, emulado en Linux."""
-    available = set(QStyleFactory.keys())
-    if "windowsvista" in available:          # Windows -> look Win7 nativo
-        app.setStyle("windowsvista")
-    elif "Fusion" in available:              # Linux/macOS -> base neutra
+    """Aplica el look ZaraRadio de forma IDÉNTICA en Linux y Windows.
+
+    Se fuerza el estilo **Fusion + win7.qss** en TODAS las plataformas (no el
+    estilo nativo Win11), para que el aspecto sea exactamente el mismo que se
+    desarrolla/ajusta en Linux y se vea igual en las esclavas Windows
+    (pixel-perfect controlado por la hoja de estilos, no por el SO).
+    """
+    if "Fusion" in set(QStyleFactory.keys()):
         app.setStyle("Fusion")
     qss = Path(__file__).resolve().parent / "ui" / "style" / "win7.qss"
     if qss.exists():
@@ -52,6 +55,12 @@ def main() -> int:
     config = load_config()
     logger = setup_logging(config["paths"]["logs_folder"])
     _install_excepthook(logger)
+
+    # Asegura que ffmpeg/ffprobe sean invocables (PATH) — clave en Windows, donde
+    # no suelen estar en el PATH y rompían la emisión y el sondeo de duración.
+    from .core.fftools import ensure_on_path
+    ff = ensure_on_path(config)
+    logger.info("ffmpeg=%s ffprobe=%s", ff.get("ffmpeg"), ff.get("ffprobe"))
 
     app = QApplication(sys.argv)
     app.setApplicationName(C.APP_NAME)

@@ -152,7 +152,6 @@ class MainWindow(QMainWindow):
         self._record_btn.clicked.connect(lambda: self._on_action("ryo.record"))
         tb.addWidget(self._record_btn)
         add_btn("📝", "ryo.mentions", "Menciones (REDYUNGAS OIL)")
-        add_btn("📻", "media.tune", "Recibir señal (escuchar un stream)")
         add_btn("❓", "help.contents", "Ayuda")
 
         spacer = QWidget()
@@ -279,9 +278,11 @@ class MainWindow(QMainWindow):
 
         # Controles -> motor
         self.transport.action_triggered.connect(self._on_action)
-        self.transport.volume_changed.connect(self._on_volume)
+        self.transport.seek_requested.connect(self.engine.set_position)
         self.master_volume.valueChanged.connect(self._on_volume)
         self.playlist.view.doubleClicked.connect(lambda idx: self.engine.play_index(idx.row()))
+        self.playlist.action_requested.connect(self._on_playlist_action)
+        self._clipboard: list = []
         self.up_btn.clicked.connect(lambda: self.playlist.move_selected(-1))
         self.down_btn.clicked.connect(lambda: self.playlist.move_selected(1))
         self.cartwall.cart_triggered.connect(self._on_cart)
@@ -380,6 +381,7 @@ class MainWindow(QMainWindow):
     def _on_position(self, remaining: float, total: float) -> None:
         self.onair.set_remaining(fmt_mmss_tenths(remaining))
         self._sb_time.setText(fmt_mmss_tenths(remaining))
+        self.transport.set_position((total - remaining) / total if total > 0 else 0.0)
         if remaining > 0:
             ends = QDateTime.currentDateTime().addSecs(int(round(remaining)))
             self.onair.set_ends_at(ends.toString("HH:mm:ss"))
@@ -392,11 +394,10 @@ class MainWindow(QMainWindow):
 
     def _on_volume(self, value: int) -> None:
         self.engine.set_volume(value)
-        for slider in (self.transport.slider, self.master_volume):
-            if slider.value() != value:
-                slider.blockSignals(True)
-                slider.setValue(value)
-                slider.blockSignals(False)
+        if self.master_volume.value() != value:
+            self.master_volume.blockSignals(True)
+            self.master_volume.setValue(value)
+            self.master_volume.blockSignals(False)
 
     def _on_cart(self, slot: int) -> None:
         if not self.engine.fire_cart(slot):
@@ -404,6 +405,47 @@ class MainWindow(QMainWindow):
                 f"Cuña {chr(0x2460 + slot)} vacía — arrastra un audio sobre el botón para asignarla.",
                 4000,
             )
+
+    # ------------------------------------------------- menú contextual de la lista
+    def _on_playlist_action(self, action: str, row: int) -> None:
+        from copy import deepcopy
+        model = self.playlist.model
+        rows = self.playlist.selected_rows() or ([row] if row >= 0 else [])
+        if action == "play" and row >= 0:
+            self.engine.play_index(row)
+        elif action == "mark_next" and row >= 0:
+            self.engine.set_next(row)
+            self.statusBar().showMessage(f"➡️ Marcada como siguiente: {model.items[row].title}", 4000)
+        elif action == "rename" and row >= 0:
+            cur = model.items[row].title
+            text, ok = QInputDialog.getText(self, "Renombrar", "Nuevo título:", text=cur)
+            if ok and text.strip():
+                model.rename(row, text.strip())
+        elif action == "assign_pisador" and row >= 0:
+            music_root = (self.config.get("paths", {}) or {}).get("music_root") or str(Path.home())
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Asignar pisador a la pista", music_root,
+                "Audio (*.mp3 *.wav *.ogg *.flac *.m4a *.aac *.opus);;Todos (*)")
+            if path:
+                model.set_pisador(row, path)
+                self.statusBar().showMessage(f"🎙 Pisador asignado a: {model.items[row].title}", 4000)
+        elif action == "cue" and row >= 0:
+            self.engine.play_index(row)   # pre-escucha simple (al aire por ahora)
+        elif action == "sel_duration":
+            total = sum(model.items[r].duration for r in rows if 0 <= r < len(model.items))
+            QMessageBox.information(self, "Duración de la selección",
+                                    f"{len(rows)} pista(s)\nDuración total: {fmt_mmss_tenths(total)}")
+        elif action == "update_duration":
+            model.reprobe(rows)
+        elif action == "copy":
+            self._clipboard = [deepcopy(model.items[r]) for r in rows if 0 <= r < len(model.items)]
+        elif action == "paste" and self._clipboard:
+            at = (row + 1) if row >= 0 else None
+            for it in self._clipboard:
+                at = model.insert_item(deepcopy(it), at)
+                at += 1
+        elif action == "delete" and rows:
+            model.remove_rows(rows)
 
     def _add_tracks(self) -> None:
         music_root = (self.config.get("paths", {}) or {}).get("music_root") or str(Path.home())
@@ -497,6 +539,12 @@ class MainWindow(QMainWindow):
         if action_id in _MEDIA_ACTIONS:
             getattr(self.engine, _MEDIA_ACTIONS[action_id])()
             return
+        if action_id == "media.duck":
+            on = self.engine.toggle_manual_duck()
+            self.transport.set_ducked(on)
+            self.statusBar().showMessage(
+                "🔉 Pisador manual: música BAJADA" if on else "🔊 Pisador manual: música normal", 3000)
+            return
         if action_id == "list.add_tracks":
             self._add_tracks()
             return
@@ -555,9 +603,6 @@ class MainWindow(QMainWindow):
         if action_id == "ryo.mentions":
             self._open_mentions()
             return
-        if action_id == "media.tune":
-            self._open_tuner()
-            return
         if action_id == "help.update":
             self._check_updates(manual=True)
             return
@@ -608,15 +653,6 @@ class MainWindow(QMainWindow):
         self.mentions_window.show()
         self.mentions_window.raise_()
         self.mentions_window.activateWindow()
-
-    def _open_tuner(self) -> None:
-        """Sintonizador manual: escuchar un stream sin cambiar de perfil ni reiniciar."""
-        from .widgets.tuner_window import TunerWindow
-        if getattr(self, "_tuner", None) is None:
-            self._tuner = TunerWindow(self.config, self)
-        self._tuner.show()
-        self._tuner.raise_()
-        self._tuner.activateWindow()
 
     # ------------------------------------------------------------- MCP (IA)
     def _setup_mcp(self) -> None:
@@ -697,8 +733,44 @@ class MainWindow(QMainWindow):
         # "Sonando ahora" del playout -> metadata del DNAS (como Opticodec).
         self.engine.now_playing_changed.connect(lambda _i, t: self.stream_encoder.set_metadata(t))
 
+        # Receptor integrado al fondo del panel PUERTO (escuchar la transmisión).
+        self.stream_receiver = None
+        self.stream_recv_meter = None
+        self.stream_panel.recv_listen.connect(self._recv_listen)
+        self.stream_panel.recv_stop.connect(self._recv_stop)
+        self.stream_panel.recv_volume.connect(self._recv_volume)
+
         if (self.config.get("stream", {}) or {}).get("connect_on_start"):
             self._stream_emit()
+
+    def _recv_listen(self, url: str) -> None:
+        if not url:
+            return
+        self._recv_stop()
+        from ..audio.receiver import StreamReceiver
+        from ..audio.stream_meter import StreamMeter
+        cfg = {"network": {"stream_url": url}}
+        self.stream_receiver = StreamReceiver(cfg, self)
+        self.stream_receiver.health_changed.connect(self.stream_panel.set_recv_status)
+        self.stream_receiver.set_volume(self.stream_panel.recv_vol.value())
+        self.stream_receiver.start()
+        # VU real del stream recibido (ffmpeg astats sobre la URL).
+        self.stream_recv_meter = StreamMeter(self.config, self, source_url=url)
+        self.stream_recv_meter.levels_changed.connect(self.stream_panel.set_recv_levels)
+        self.stream_recv_meter.start()
+
+    def _recv_stop(self) -> None:
+        if self.stream_receiver is not None:
+            self.stream_receiver.stop()
+            self.stream_receiver = None
+        if self.stream_recv_meter is not None:
+            self.stream_recv_meter.stop()
+            self.stream_recv_meter = None
+        self.stream_panel.set_recv_status("stopped")
+
+    def _recv_volume(self, value: int) -> None:
+        if self.stream_receiver is not None:
+            self.stream_receiver.set_volume(value)
 
     def _toggle_stream_panel(self, is_open: bool) -> None:
         self.stream_panel.setVisible(is_open)
@@ -752,6 +824,10 @@ class MainWindow(QMainWindow):
                 self.stream_encoder.stop()
             if getattr(self, "stream_meter", None):
                 self.stream_meter.stop()
+            if getattr(self, "stream_receiver", None):
+                self.stream_receiver.stop()
+            if getattr(self, "stream_recv_meter", None):
+                self.stream_recv_meter.stop()
             if getattr(self, "recorder", None) and self.recorder.is_recording():
                 self.recorder.stop()
             if getattr(self, "mcp_server", None):

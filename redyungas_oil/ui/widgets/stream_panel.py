@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSlider,
     QVBoxLayout,
@@ -96,6 +97,9 @@ class StreamPanel(QWidget):
     stop_requested = pyqtSignal()
     settings_requested = pyqtSignal()
     gain_changed = pyqtSignal(float)     # dB (debounced)
+    recv_listen = pyqtSignal(str)        # escuchar la URL
+    recv_stop = pyqtSignal()             # detener la escucha
+    recv_volume = pyqtSignal(int)        # volumen del receptor 0..100
 
     def __init__(self, config: dict, parent=None) -> None:
         super().__init__(parent)
@@ -174,6 +178,44 @@ class StreamPanel(QWidget):
         root.addWidget(foot)
         root.addStretch(1)
 
+        # ---------------- RECEPTOR (escuchar la transmisión) ----------------
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine); sep.setObjectName("streamSep")
+        root.addWidget(sep)
+        rtag = QLabel("RECEPTOR"); rtag.setObjectName("streamBannerSub")
+        root.addWidget(rtag)
+
+        host = st.get("host", ""); port = int(st.get("port", 8032))
+        default_recv = (config.get("network", {}) or {}).get("stream_url") \
+            or f"http://{host}:{port}/stream"
+        self.recv_url = QLineEdit(default_recv)
+        self.recv_url.setObjectName("streamUrl")
+        root.addWidget(self.recv_url)
+
+        self.recv_vu = StreamVuMeter()
+        root.addWidget(self.recv_vu)
+
+        rvol = QHBoxLayout(); rvol.setSpacing(6)
+        rvol.addWidget(QLabel("Vol"))
+        self.recv_vol = QSlider(Qt.Orientation.Horizontal)
+        self.recv_vol.setRange(0, 100); self.recv_vol.setValue(90)
+        rvol.addWidget(self.recv_vol, 1)
+        root.addLayout(rvol)
+
+        rbtns = QHBoxLayout(); rbtns.setSpacing(6)
+        self.btn_listen = QPushButton("▶ Escuchar"); self.btn_listen.setObjectName("emitButton")
+        self.btn_listen_stop = QPushButton("■ Detener"); self.btn_listen_stop.setObjectName("stopEmitButton")
+        self.btn_listen_stop.setEnabled(False)
+        rbtns.addWidget(self.btn_listen, 1)
+        rbtns.addWidget(self.btn_listen_stop, 1)
+        root.addLayout(rbtns)
+
+        self.recv_status = QLabel("● Detenido"); self.recv_status.setObjectName("streamStatusOff")
+        root.addWidget(self.recv_status)
+
+        self.btn_listen.clicked.connect(lambda: self.recv_listen.emit(self.recv_url.text().strip()))
+        self.btn_listen_stop.clicked.connect(self.recv_stop)
+        self.recv_vol.valueChanged.connect(self.recv_volume)
+
         # --- Debounce de la ganancia (no relanzar ffmpeg en cada tick) ---
         self._gain_debounce = QTimer(self)
         self._gain_debounce.setSingleShot(True)
@@ -203,6 +245,31 @@ class StreamPanel(QWidget):
         """Aplica la ganancia a los niveles crudos del medidor y los muestra."""
         g = self._gain
         self.vu.set_levels(rms_l + g, rms_r + g, peak_l + g, peak_r + g)
+
+    def set_recv_levels(self, rms_l: float, rms_r: float, peak_l: float, peak_r: float) -> None:
+        self.recv_vu.set_levels(rms_l, rms_r, peak_l, peak_r)
+
+    def recv_url_text(self) -> str:
+        return self.recv_url.text().strip()
+
+    def set_recv_status(self, state: str) -> None:
+        if state == "on_air":
+            self.recv_status.setText("● EN VIVO — recibiendo")
+            self.recv_status.setObjectName("streamStatusOn")
+            self.btn_listen.setEnabled(False); self.btn_listen_stop.setEnabled(True)
+        elif state == "connecting":
+            self.recv_status.setText("● Conectando…")
+            self.recv_status.setObjectName("streamStatusWarn")
+            self.btn_listen.setEnabled(False); self.btn_listen_stop.setEnabled(True)
+        elif state == "lost":
+            self.recv_status.setText("● Señal perdida — reintentando…")
+            self.recv_status.setObjectName("streamStatusWarn")
+        else:  # stopped
+            self.recv_status.setText("● Detenido")
+            self.recv_status.setObjectName("streamStatusOff")
+            self.btn_listen.setEnabled(True); self.btn_listen_stop.setEnabled(False)
+        self.recv_status.style().unpolish(self.recv_status)
+        self.recv_status.style().polish(self.recv_status)
 
     def set_status(self, state: str) -> None:
         if state == "emitting":

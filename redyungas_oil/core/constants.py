@@ -12,7 +12,7 @@ from __future__ import annotations
 # Identidad / branding  (el "disfraz" cambia ZaraRadio -> REDYUNGAS OIL)
 # ---------------------------------------------------------------------------
 APP_NAME = "REDYUNGAS OIL"
-APP_VERSION = "1.1.1"           # v1.1.1 — sintonizador "Recibir señal" + config junto al .exe
+APP_VERSION = "1.2.0"           # v1.2 — fixes audio (silencio/duración/seek), receptor en PUERTO, ganancia ±48, ffmpeg PATH, menú click-derecho, look Fusion cross-platform
 APP_TITLE_DEFAULT = "Sin título 1"   # equivalente a "SinTítulo1" de ZaraRadio
 ORG_NAME = "Red Yungas"
 
@@ -108,8 +108,6 @@ MENUS = {
         ("Pisador", "T", "media.voiceover"),
         ("Parar tras la actual", "B", "media.stop_after"),
         ("-", None, None),
-        ("Recibir señal...", "R", "media.tune"),
-        ("-", None, None),
         ("Renombrar", "F2", "media.rename"),
     ],
     "Herramientas": [
@@ -154,8 +152,8 @@ DEFAULT_ICECAST_PORT = 8032      # servidor de stream remoto (externo)
 STREAM_VU_MIN_DB = -40.0         # extremo izquierdo del riel (silencio)
 STREAM_VU_MAX_DB = 0.0           # extremo derecho (saturación / clip)
 STREAM_VU_TICKS = (-30, -24, -18, -12, -6, 0)   # marcas como en Opticodec
-STREAM_GAIN_MIN_DB = -24.0       # rango del control de saturación independiente
-STREAM_GAIN_MAX_DB = 12.0
+STREAM_GAIN_MIN_DB = -48.0       # rango del control de saturación independiente
+STREAM_GAIN_MAX_DB = 48.0
 
 # ---------------------------------------------------------------------------
 # Umbrales de operación por defecto (segundos). Configurables.

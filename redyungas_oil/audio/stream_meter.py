@@ -48,9 +48,13 @@ class StreamMeter(QObject):
     levels_changed = pyqtSignal(float, float, float, float)
     running_changed = pyqtSignal(bool)
 
-    def __init__(self, config: dict, parent=None) -> None:
+    def __init__(self, config: dict, parent=None, source_url: str | None = None) -> None:
         super().__init__(parent)
-        self.fmt, self.device = resolve_input(config)
+        if source_url:                       # medir un stream recibido (URL)
+            self._input = ["-i", source_url]
+        else:                                # medir el bus de programa (captura)
+            fmt, device = resolve_input(config)
+            self._input = ["-f", fmt, "-i", device]
         self._proc: subprocess.Popen | None = None
         self._reader: threading.Thread | None = None
         self._want_running = False
@@ -61,7 +65,7 @@ class StreamMeter(QObject):
     def build_cmd(self) -> list[str]:
         return [
             "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "error",
-            "-f", self.fmt, "-i", self.device,
+            *self._input,
             "-af", ("asetnsamples=n=2048:p=0,"
                     "astats=metadata=1:reset=1,"
                     "ametadata=mode=print:file=-"),
@@ -100,7 +104,7 @@ class StreamMeter(QObject):
         self._reader = threading.Thread(target=self._read_loop, args=(self._proc,),
                                         daemon=True)
         self._reader.start()
-        log.info("Medidor de stream PID %s sobre %s:%s", self._proc.pid, self.fmt, self.device)
+        log.info("Medidor de stream PID %s sobre %s", self._proc.pid, " ".join(self._input))
         self.running_changed.emit(True)
 
     def _read_loop(self, proc: subprocess.Popen) -> None:

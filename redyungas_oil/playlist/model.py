@@ -206,6 +206,31 @@ class PlaylistModel(QAbstractTableModel):
         self._recompute_markers()
         return dst
 
+    # --------------------------------------------------- acciones de la lista
+    def rename(self, row: int, title: str) -> None:
+        if 0 <= row < len(self.items) and title:
+            self.items[row].title = title
+            self.dataChanged.emit(self.index(row, 0), self.index(row, 0),
+                                  [Qt.ItemDataRole.DisplayRole])
+
+    def reprobe(self, rows) -> None:
+        """Vuelve a sondear la duración de las filas dadas (Actualizar duración)."""
+        for r in rows:
+            if 0 <= r < len(self.items):
+                it = self.items[r]
+                if it.type == ItemType.TRACK and it.path:
+                    it.duration = 0.0
+                    self.dataChanged.emit(self.index(r, 1), self.index(r, 1),
+                                          [Qt.ItemDataRole.DisplayRole])
+                    self._pool.start(ProbeTask(it.path, self._probe))
+
+    def set_pisador(self, row: int, path: str) -> None:
+        if 0 <= row < len(self.items):
+            self.items[row].meta["pisador"] = path
+
+    def item_at(self, row: int):
+        return self.items[row] if 0 <= row < len(self.items) else None
+
     # ----------------------------------------------------------- marcadores
     def set_playing(self, current: int, nxt: int) -> None:
         self._current_item = self.items[current] if 0 <= current < len(self.items) else None

@@ -71,7 +71,7 @@ send_to_jarvis = false        # entregar cada segmento a JARVIS para transcripci
 [update]
 enabled = true
 branch = "master"
-check_on_start = true         # avisar al arrancar si hay una versión nueva
+check_on_start = false        # de día NO (en vivo); se actualiza de noche por Telegram/MARCUS
 
 # ---------------------------------------------------------------------------
 # Control por IA (Model Context Protocol). En producción bind a IP Tailscale.

@@ -2,8 +2,11 @@
 ui/widgets/transport_bar.py — Barra de transporte (réplica ZaraRadio).
 
 Botones clásicos coloreados (Reproducir, Parar, Pausa, Siguiente, retroceder,
-avanzar, cue, crossfade) + slider horizontal de volumen/posición. En Fase 2 se
-conectan al motor de audio.
+avanzar, cue, pisador manual) + **barra de POSICIÓN** (seek) de la pista que
+suena. El volumen NO está aquí: vive en el slider vertical de arriba.
+
+El botón ≈ ("Fundido / pisador") es el PISADOR MANUAL: baja la música y la
+mantiene baja hasta volver a pulsarlo (lo maneja el motor).
 """
 
 from __future__ import annotations
@@ -20,13 +23,15 @@ _BUTTONS = [
     ("◀◀", "#e23b2e", "media.rewind", "Retroceder"),
     ("▶▶", "#e23b2e", "media.forward", "Avanzar"),
     ("⟳", "#2a6fb5", "media.cue", "Cue"),
-    ("≈", "#1ea83c", "media.crossfade", "Fundido / crossfade"),
+    ("≈", "#1ea83c", "media.duck", "Fundido / pisador manual (baja la música hasta volver a pulsar)"),
 ]
+
+_RES = 1000   # resolución del slider de posición
 
 
 class TransportBar(QWidget):
     action_triggered = pyqtSignal(str)   # emite el action_id
-    volume_changed = pyqtSignal(int)
+    seek_requested = pyqtSignal(float)   # posición 0.0..1.0
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -47,9 +52,37 @@ class TransportBar(QWidget):
             layout.addWidget(btn)
 
         layout.addSpacing(10)
-        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider = QSlider(Qt.Orientation.Horizontal)   # POSICIÓN de la pista
         self.slider.setObjectName("transportSlider")
-        self.slider.setRange(0, 100)
-        self.slider.setValue(85)
-        self.slider.valueChanged.connect(self.volume_changed.emit)
+        self.slider.setRange(0, _RES)
+        self.slider.setValue(0)
+        self.slider.setToolTip("Posición de la pista (arrastra para navegar)")
+        self._seeking = False
+        self.slider.sliderPressed.connect(self._on_press)
+        self.slider.sliderReleased.connect(self._on_release)
         layout.addWidget(self.slider, 1)
+
+    # ------------------------------------------------------------------ seek
+    def _on_press(self) -> None:
+        self._seeking = True
+
+    def _on_release(self) -> None:
+        self._seeking = False
+        self.seek_requested.emit(self.slider.value() / _RES)
+
+    def set_position(self, fraction: float) -> None:
+        """Mueve la barra según la posición de reproducción (si el usuario no arrastra)."""
+        if self._seeking:
+            return
+        v = max(0, min(_RES, int(fraction * _RES)))
+        if v != self.slider.value():
+            self.slider.blockSignals(True)
+            self.slider.setValue(v)
+            self.slider.blockSignals(False)
+
+    def set_ducked(self, on: bool) -> None:
+        """Resalta el botón de pisador manual cuando está activo."""
+        btn = self.buttons.get("media.duck")
+        if btn:
+            btn.setStyleSheet("QToolButton { color: #ffffff; background: #e23b2e; }"
+                              if on else "QToolButton { color: #1ea83c; }")

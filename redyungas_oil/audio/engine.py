@@ -24,6 +24,7 @@ from .crossfade import CrossfadeController
 from .locutions import LocutionMaker
 
 _CROSSFADE_TYPES = {ItemType.TRACK, ItemType.RANDOM}
+_DUCK_LEVEL = 0.30      # nivel al que baja la música con el pisador (auto o manual)
 
 
 class AudioEngine(QObject):
@@ -47,11 +48,14 @@ class AudioEngine(QObject):
 
         self.current_index = -1
         self.next_index = -1
+        self._forced_next = -1        # "Marcar como siguiente" (click derecho)
         self._paused = False
         self._crossfading = False
         self._xfade: CrossfadeController | None = None
         self._pending_index = -1
-        self._ducking = False
+        self._duck = 1.0              # multiplicador de volumen de la música (1.0 = normal)
+        self._auto_pisador = False    # pisador disparado por voz/locución (temporal)
+        self._manual_duck = False     # pisador manual (botón ≈), persistente
         self._vu_l = 0.0
         self._vu_r = 0.0
         self._weather = (0.0, 0.0)
@@ -128,6 +132,8 @@ class AudioEngine(QObject):
         if not items or i < 0 or i >= len(items):
             self.stop()
             return
+        if i == self._forced_next:
+            self._forced_next = -1        # se consume al reproducirla
         item = items[i]
         if item.type == ItemType.STOP:
             self.current_index = i
@@ -149,12 +155,17 @@ class AudioEngine(QObject):
         self._cancel_crossfade()
         player = self._player()
         self._load(player, path)
-        player.audio_set_volume(self._volume)
         player.play()
+        # VLC pierde el volumen si se setea antes de tener salida de audio:
+        # se aplica DESPUÉS de play() y el poll lo refuerza (arregla el silencio).
+        player.audio_set_volume(self._target_volume())
         self._paused = False
         self.current_index = i
         self._emit_track(i, title)
         self.state_changed.emit("playing")
+        pisador = item.meta.get("pisador")          # pisador asignado a la pista
+        if pisador:
+            self.play_voiceover(pisador)
 
     def _enter_pause(self, i: int, seconds: int) -> None:
         self._cancel_crossfade()
@@ -190,17 +201,51 @@ class AudioEngine(QObject):
         self.levels_changed.emit(0.0, 0.0)
         self.position_changed.emit(0.0, 0.0)
 
+    def _next_to_play(self) -> int:
+        """Índice de la próxima pista: el 'marcado como siguiente' o el secuencial."""
+        items = self._items()
+        if 0 <= self._forced_next < len(items):
+            return self._forced_next
+        nxt = (self.current_index + 1) if self.current_index >= 0 else 0
+        return nxt if nxt < len(items) else -1
+
+    def set_next(self, i: int) -> None:
+        """'Marcar como siguiente' (click derecho): la pista i sonará después."""
+        items = self._items()
+        if not (0 <= i < len(items)):
+            return
+        self._forced_next = i
+        self.next_index = i
+        self.next_changed.emit(i, items[i].title)
+        if self.model:
+            self.model.set_playing(self.current_index, i)
+
     def next(self) -> None:
-        self.play_index(self.current_index + 1 if self.current_index >= 0 else 0)
+        nxt = self._next_to_play()
+        self._forced_next = -1
+        self.play_index(nxt if nxt >= 0 else (self.current_index + 1))
 
     def previous(self) -> None:
         if self.current_index > 0:
             self.play_index(self.current_index - 1)
 
+    def _target_volume(self) -> int:
+        """Volumen efectivo de la música (aplica el ducking del pisador)."""
+        return max(0, min(100, int(self._volume * self._duck)))
+
     def set_volume(self, volume: int) -> None:
         self._volume = max(0, min(100, int(volume)))
         if not self._crossfading:
-            self._player().audio_set_volume(self._volume)
+            self._player().audio_set_volume(self._target_volume())
+
+    def set_position(self, fraction: float) -> None:
+        """Salta a una posición de la pista actual (0.0..1.0) — barra de seek."""
+        if self._crossfading:
+            return
+        try:
+            self._player().set_position(max(0.0, min(1.0, float(fraction))))
+        except Exception:
+            pass
 
     # --------------------------------------------------------------- cartwall
     def assign_cart(self, slot: int, path: str) -> None:
@@ -228,10 +273,23 @@ class AudioEngine(QObject):
         self._pisador.set_media(self._vlc.media_new(path))
         self._pisador.audio_set_volume(self._volume)
         self._pisador.play()
+        self._auto_pisador = True
+        self._duck = _DUCK_LEVEL
         if not self._crossfading:
-            self._player().audio_set_volume(int(self._volume * 0.30))
-        self._ducking = True
+            self._player().audio_set_volume(self._target_volume())
         return True
+
+    def toggle_manual_duck(self) -> bool:
+        """Pisador MANUAL (botón ≈): baja/sube la música y se mantiene hasta volver
+        a pulsar. Devuelve el nuevo estado (True = música bajada)."""
+        self._manual_duck = not self._manual_duck
+        self._duck = _DUCK_LEVEL if (self._manual_duck or self._auto_pisador) else 1.0
+        if not self._crossfading:
+            self._player().audio_set_volume(self._target_volume())
+        return self._manual_duck
+
+    def is_ducked(self) -> bool:
+        return self._manual_duck
 
     def play_locution(self, kind: str) -> bool:
         """Dispara una locución (time/temperature/humidity) como pisador."""
@@ -258,7 +316,7 @@ class AudioEngine(QObject):
         self._pending_title = title
         duration = int((self.config.get("audio", {}) or {}).get("crossfade_ms", C.CROSSFADE_MS))
         self._xfade = CrossfadeController(self._player(), other, duration,
-                                          target_volume=self._volume, parent=self)
+                                          target_volume=self._target_volume(), parent=self)
         self._xfade.finished.connect(self._finish_crossfade)
         self._xfade.start()
         return True
@@ -266,6 +324,7 @@ class AudioEngine(QObject):
     def _finish_crossfade(self) -> None:
         self._player().stop()
         self._active = 1 - self._active
+        self._player().audio_set_volume(self._target_volume())   # asegurar el entrante
         self._crossfading = False
         self._xfade = None
         self.current_index = self._pending_index
@@ -283,7 +342,10 @@ class AudioEngine(QObject):
     def _emit_track(self, i: int, title: str | None = None) -> None:
         items = self._items()
         self.now_playing_changed.emit(i, title or items[i].title)
-        nxt = i + 1 if i + 1 < len(items) else -1
+        if 0 <= self._forced_next < len(items) and self._forced_next != i:
+            nxt = self._forced_next
+        else:
+            nxt = i + 1 if i + 1 < len(items) else -1
         self.next_index = nxt
         self.next_changed.emit(nxt, items[nxt].title if nxt >= 0 else "")
         if self.model:
@@ -305,11 +367,12 @@ class AudioEngine(QObject):
             total = length if length > 0 else fallback
             remaining = max(0.0, total - elapsed) if total > 0 else 0.0
             self.position_changed.emit(remaining, total)
+            self._enforce_volume()        # auto-cura: el entrante a veces queda mudo
             self._update_vu(True)
             self._maybe_crossfade(total, remaining)
         elif state == vlc.State.Ended:
             self._update_vu(False)
-            nxt = self.current_index + 1
+            nxt = self._next_to_play()
             if 0 <= nxt < len(self._items()):
                 self.play_index(nxt)
             else:
@@ -317,22 +380,37 @@ class AudioEngine(QObject):
         else:
             self._update_vu(False)
 
+    def _enforce_volume(self) -> None:
+        """Garantiza que la música activa suene al volumen efectivo (no mudo)."""
+        if self._crossfading:
+            return
+        p = self._player()
+        tgt = self._target_volume()
+        try:
+            if p.audio_get_volume() != tgt:
+                p.audio_set_volume(tgt)
+        except Exception:
+            pass
+
     def _update_ducking(self) -> None:
-        if not self._ducking:
+        if not self._auto_pisador:
             return
         if self._pisador.get_state() in (vlc.State.Ended, vlc.State.Error):
+            self._auto_pisador = False
+            if not self._manual_duck:        # el pisador MANUAL persiste
+                self._duck = 1.0
             if not self._crossfading:
-                self._player().audio_set_volume(self._volume)
-            self._ducking = False
+                self._player().audio_set_volume(self._target_volume())
 
     def _maybe_crossfade(self, total: float, remaining: float) -> None:
         cf = int((self.config.get("audio", {}) or {}).get("crossfade_ms", C.CROSSFADE_MS)) / 1000.0
         if cf <= 0 or self._paused or total <= cf or remaining > cf:
             return
-        nxt = self.current_index + 1
+        nxt = self._next_to_play()
         items = self._items()
-        if nxt < len(items) and items[nxt].type in _CROSSFADE_TYPES:
-            self._start_crossfade(nxt)
+        if 0 <= nxt < len(items) and items[nxt].type in _CROSSFADE_TYPES:
+            if self._start_crossfade(nxt) and nxt == self._forced_next:
+                self._forced_next = -1
 
     def _update_vu(self, active: bool) -> None:
         # FASE 2: VU aproximado (animado). Medidor PCM real = refinamiento posterior.

@@ -51,6 +51,8 @@ DEFAULTS: dict[str, Any] = {
         "emergency_folder": "",      # carpeta de emergencia (failover por silencio)
         "recordings_folder": str(PROJECT_ROOT / "grabaciones"),
         "logs_folder": str(PROJECT_ROOT / "logs"),
+        "ffmpeg": "",                # ruta a ffmpeg (vacío = autodetectar/PATH)
+        "ffprobe": "",               # ruta a ffprobe (vacío = autodetectar/PATH)
     },
     "audio": {
         "crossfade_ms": C.CROSSFADE_MS,
@@ -101,7 +103,10 @@ DEFAULTS: dict[str, Any] = {
     "update": {
         "enabled": True,             # auto-actualización desde el repo privado
         "branch": "master",
-        "check_on_start": True,      # avisar al arrancar si hay versión nueva
+        # Por defecto NO se busca al arrancar: las esclavas están EN VIVO de día.
+        # La actualización se dispara de noche por Telegram/MARCUS (git pull),
+        # o a mano desde Ayuda → Buscar actualizaciones.
+        "check_on_start": False,
     },
     "mcp": {
         "enabled": False,

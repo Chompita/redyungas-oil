@@ -9,11 +9,14 @@ con las flechas ▲▼ de la ventana principal (model.move_row).
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
     QTableView,
     QToolButton,
     QVBoxLayout,
@@ -23,8 +26,27 @@ from PyQt6.QtWidgets import (
 from ...core.timefmt import fmt_mmss_tenths
 from ...playlist.model import PlaylistModel
 
+# (etiqueta, action_id, atajo)  — réplica del menú de click derecho de ZaraRadio
+_CONTEXT_ITEMS = [
+    ("Marcar como siguiente", "mark_next", None),
+    ("Reproducir", "play", None),
+    ("Renombrar", "rename", "F2"),
+    ("Asignar pisador...", "assign_pisador", None),
+    ("-", None, None),
+    ("Cue", "cue", None),
+    ("Ver la duración de la selección...", "sel_duration", "Ctrl+L"),
+    ("Actualizar duración", "update_duration", "Ctrl+U"),
+    ("-", None, None),
+    ("Copiar", "copy", "Ctrl+C"),
+    ("Pegar", "paste", "Ctrl+V"),
+    ("-", None, None),
+    ("Eliminar", "delete", "Del"),
+]
+
 
 class PlaylistView(QWidget):
+    action_requested = pyqtSignal(str, int)   # (action_id, row)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.model = PlaylistModel(self)
@@ -60,9 +82,29 @@ class PlaylistView(QWidget):
         hh = self.view.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.view.customContextMenuRequested.connect(self._context_menu)
         root.addWidget(self.view, 1)
 
         self.model.total_changed.connect(self._update_total)
+
+    # ----------------------------------------------------------- menú contextual
+    def _context_menu(self, pos) -> None:
+        index = self.view.indexAt(pos)
+        row = index.row() if index.isValid() else -1
+        if row >= 0 and row not in self.selected_rows():
+            self.view.selectRow(row)
+        menu = QMenu(self)
+        for label, action_id, shortcut in _CONTEXT_ITEMS:
+            if label == "-":
+                menu.addSeparator()
+                continue
+            act = menu.addAction(label)
+            if shortcut:
+                act.setShortcut(QKeySequence(shortcut))
+            act.setEnabled(row >= 0 or action_id == "paste")
+            act.triggered.connect(lambda _=False, a=action_id, r=row: self.action_requested.emit(a, r))
+        menu.exec(self.view.viewport().mapToGlobal(pos))
 
     def _update_total(self, total: float) -> None:
         self.total_label.setText(f"Duración Total: {fmt_mmss_tenths(total)}")
