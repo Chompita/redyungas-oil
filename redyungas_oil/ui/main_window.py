@@ -15,18 +15,31 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QDateTime, Qt, QTime, QTimer, QUrl
+from PyQt6.QtCore import (
+    QDateTime,
+    QEasingCurve,
+    QEvent,
+    QPropertyAnimation,
+    Qt,
+    QTime,
+    QTimer,
+    QUrl,
+)
 from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QSlider,
+    QTextEdit,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -44,11 +57,12 @@ from ..playlist.item_types import ItemType, PlaylistItem
 from ..playlist.lst_io import load_lst, save_lst
 from ..scheduler.events import Event, EventScheduler
 from ..scheduler.mentions import MentionManager
+from .widgets.aux_panel import AuxPlaylistPanel
 from .widgets.cartwall import Cartwall
 from .widgets.events_panel import EventsPanel
 from .widgets.file_tree import FileTree
 from .widgets.lcd_clock import ClockBar
-from .widgets.mentions_window import MentionsWindow
+from .widgets.mentions_panel import MentionsPanel, MentionsRail
 from .widgets.log_viewer import LogViewer
 from .widgets.onair_panel import NextPanel, OnAirPanel
 from .widgets.options_dialog import OptionsDialog
@@ -61,28 +75,60 @@ _MEDIA_ACTIONS = {
     "media.next": "next", "media.rewind": "previous", "media.forward": "next",
 }
 
+# Toggles por-cuña: action_id de UI -> método del motor / nombre de modo del motor.
+_MODE_SETTERS = {
+    "media.cyclic": "set_cyclic",
+    "media.delete_on_play": "set_delete_on_play",
+    "media.stop_after": "set_stop_after",
+}
+_MODE_TO_ACTION = {
+    "cyclic": "media.cyclic",
+    "delete_on_play": "media.delete_on_play",
+    "stop_after": "media.stop_after",
+}
+
 
 class MainWindow(QMainWindow):
     def __init__(self, config: dict | None = None) -> None:
         super().__init__()
         self.config = config or {}
         self.setWindowTitle(f"{C.APP_TITLE_DEFAULT} — {C.APP_NAME}")
-        self.resize(1024, 648)
+        # La ventana abre YA con el ancho que tendría con el panel PUERTO desplegado,
+        # así su ancho NO cambia al abrir/cerrar el PUERTO (el área central lo absorbe).
+        self.resize(1336, 650)
 
         self._actions: dict[str, QAction] = {}
-        self.mentions_window: MentionsWindow | None = None
+        # Gestor de menciones: se crea ya para alimentar el panel/riel de la izquierda.
+        self.mentions_manager = MentionManager(self)
 
         self._build_menus()
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
         self._setup_engine()
+        self._setup_aux()
         self._setup_network()
         self._setup_recording()
+        self._setup_mic()
         self._setup_mentions()
         self._setup_mcp()
         self._setup_stream()
         self._setup_update()
+
+        # Teclas 1..9 -> disparan/silencian las cuñas del cartwall (como ZaraRadio),
+        # excepto cuando se está escribiendo en un campo de texto.
+        QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat():
+            fw = QApplication.focusWidget()
+            editing = isinstance(fw, (QLineEdit, QAbstractSpinBox, QTextEdit)) or (
+                isinstance(fw, QComboBox) and fw.isEditable())
+            key = event.key()
+            if not editing and Qt.Key.Key_1 <= key <= Qt.Key.Key_9:
+                self.cartwall.activate_slot(key - Qt.Key.Key_1)
+                return True
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------ menús
     def _build_menus(self) -> None:
@@ -140,6 +186,17 @@ class MainWindow(QMainWindow):
         add_btn("🌡", "list.add_temp", "Locución de temperatura")
         add_btn("☁", "list.add_humidity", "Locución de humedad")
         add_btn("🎲", "list.add_random", "Pista aleatoria")
+        tb.addSeparator()
+        # Botón >1: despliega la planilla AUXILIAR (Aux 1). Como ZaraRadio, pero
+        # solo una: al pulsarlo aparece el recuadro auxiliar (se desliza).
+        self.aux_btn = QToolButton()
+        self.aux_btn.setText("▶1")
+        self.aux_btn.setObjectName("auxToolButton")
+        self.aux_btn.setToolTip("Planilla auxiliar (Aux 1) — reproduce a la vez que la principal")
+        self.aux_btn.setCheckable(True)
+        self.aux_btn.setAutoRaise(True)
+        self.aux_btn.toggled.connect(self._toggle_aux_panel)
+        tb.addWidget(self.aux_btn)
         tb.addSeparator()
         add_btn("▶", "media.play", "Reproducir")
         add_btn("⏹", "media.stop", "Parar")
@@ -259,8 +316,21 @@ class MainWindow(QMainWindow):
         outer_l = QHBoxLayout(outer)
         outer_l.setContentsMargins(0, 0, 0, 0)
         outer_l.setSpacing(0)
+        # Riel + panel de MENCIONES en el borde IZQUIERDO (se desliza, como el PUERTO).
+        self.mentions_rail = MentionsRail()
+        outer_l.addWidget(self.mentions_rail, 0)
+        self.mentions_panel = MentionsPanel(self.mentions_manager)
+        self.mentions_panel.setMaximumWidth(0)   # arranca plegado
+        self.mentions_panel.setVisible(False)
+        outer_l.addWidget(self.mentions_panel, 0)
         outer_l.addWidget(central, 1)
+        # Planilla AUXILIAR (botón >1): se desliza desde la derecha, junto al PUERTO.
+        self.aux_panel = AuxPlaylistPanel(self.config)
+        self.aux_panel.setMaximumWidth(0)        # arranca plegada
+        self.aux_panel.setVisible(False)
+        outer_l.addWidget(self.aux_panel, 0)
         self.stream_panel = StreamPanel(self.config)
+        self.stream_panel.setMaximumWidth(0)     # arranca plegado (se desliza al abrir)
         self.stream_panel.setVisible(False)
         outer_l.addWidget(self.stream_panel, 0)
         self.stream_rail = StreamRail()
@@ -277,22 +347,22 @@ class MainWindow(QMainWindow):
         sb.addPermanentWidget(self._sb_time)
 
     # --------------------------------------------------------------- motor
-    def _make_engine(self):
-        """Crea el motor de audio según `[audio].engine` (sounddevice | vlc)."""
+    def _make_engine(self, model):
+        """Crea un motor de audio según `[audio].engine` (sounddevice | vlc) para `model`."""
         name = ((self.config.get("audio", {}) or {}).get("engine", "vlc") or "vlc").lower()
         if name == "sounddevice":
             try:
                 from ..audio.engine_sd import SoundDeviceEngine
-                eng = SoundDeviceEngine(self.config, model=self.playlist.model, parent=self)
+                eng = SoundDeviceEngine(self.config, model=model, parent=self)
                 self.statusBar().showMessage("Motor de audio: sounddevice (un solo grafo)", 4000)
                 return eng
             except Exception as exc:   # si falta numpy/sounddevice, caer a VLC sin romper
                 self.statusBar().showMessage(
                     f"Motor sounddevice no disponible ({exc}); usando VLC", 6000)
-        return AudioEngine(self.config, model=self.playlist.model, parent=self)
+        return AudioEngine(self.config, model=model, parent=self)
 
     def _setup_engine(self) -> None:
-        self.engine = self._make_engine()
+        self.engine = self._make_engine(self.playlist.model)
         self._ends_anchor: float | None = None   # ancla de la hora "Acaba a las"
 
         # Señales del motor -> UI
@@ -305,6 +375,8 @@ class MainWindow(QMainWindow):
         # Controles -> motor
         self.transport.action_triggered.connect(self._on_action)
         self.transport.seek_requested.connect(self.engine.set_position)
+        self.transport.mode_toggled.connect(self._on_mode_toggled)
+        self.engine.playout_mode_changed.connect(self._on_engine_mode_changed)
         self.master_volume.valueChanged.connect(self._on_volume)
         self.playlist.view.doubleClicked.connect(lambda idx: self.engine.play_index(idx.row()))
         self.playlist.action_requested.connect(self._on_playlist_action)
@@ -313,6 +385,10 @@ class MainWindow(QMainWindow):
         self.down_btn.clicked.connect(lambda: self.playlist.move_selected(1))
         self.cartwall.cart_triggered.connect(self._on_cart)
         self.cartwall.cart_assigned.connect(self.engine.assign_cart)
+        self.cartwall.fade_all_requested.connect(self.engine.fade_all_carts)
+        self.cartwall.volume_changed.connect(self.engine.set_cart_volume)
+        self.engine.cart_started.connect(lambda s: self.cartwall.set_active(s, True))
+        self.engine.cart_finished.connect(lambda s: self.cartwall.set_active(s, False))
 
         # Programador de eventos
         self.scheduler = EventScheduler(self)
@@ -327,6 +403,84 @@ class MainWindow(QMainWindow):
 
         # Volumen inicial coherente
         self._on_volume(80)
+
+    # --------------------------------------------------- planilla AUXILIAR (Aux 1)
+    def _setup_aux(self) -> None:
+        """Segundo motor INDEPENDIENTE para la planilla auxiliar (suena a la vez)."""
+        self.aux_engine = self._make_engine(self.aux_panel.playlist.model)
+
+        # Motor aux -> UI del panel aux
+        self.aux_engine.now_playing_changed.connect(lambda _i, t: self.aux_panel.set_now_playing(t))
+        self.aux_engine.position_changed.connect(
+            lambda rem, total: self.aux_panel.transport.set_position(
+                (total - rem) / total if total > 0 else 0.0))
+        self.aux_engine.playout_mode_changed.connect(
+            lambda mode, on: self.aux_panel.transport.set_mode_checked(
+                _MODE_TO_ACTION.get(mode, ""), on))
+
+        # Controles del panel aux -> motor aux
+        self.aux_panel.transport.action_triggered.connect(self._on_aux_action)
+        self.aux_panel.transport.seek_requested.connect(self.aux_engine.set_position)
+        self.aux_panel.transport.mode_toggled.connect(self._on_aux_mode_toggled)
+        self.aux_panel.volume_changed.connect(self.aux_engine.set_volume)
+        self.aux_panel.playlist.view.doubleClicked.connect(
+            lambda idx: self.aux_engine.play_index(idx.row()))
+        self.aux_panel.playlist.action_requested.connect(self._on_aux_playlist_action)
+        self.aux_panel.closed.connect(lambda: self.aux_btn.setChecked(False))
+        self.aux_engine.set_volume(self.aux_panel.volume.value())
+
+        # Animación de deslizamiento del panel auxiliar (igual que el PUERTO).
+        self._aux_anim = QPropertyAnimation(self.aux_panel, b"maximumWidth", self)
+        self._aux_anim.setDuration(240)
+        self._aux_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    def _toggle_aux_panel(self, is_open: bool) -> None:
+        anim = self._aux_anim
+        anim.stop()
+        try:
+            anim.finished.disconnect()
+        except TypeError:
+            pass
+        if is_open:
+            self.aux_panel.setVisible(True)
+            anim.setStartValue(self.aux_panel.maximumWidth())
+            anim.setEndValue(self.aux_panel.PANEL_W)
+        else:
+            anim.setStartValue(self.aux_panel.maximumWidth())
+            anim.setEndValue(0)
+            anim.finished.connect(lambda: self.aux_panel.setVisible(False))
+        anim.start()
+
+    def _on_aux_action(self, action_id: str) -> None:
+        if action_id in _MEDIA_ACTIONS:
+            getattr(self.aux_engine, _MEDIA_ACTIONS[action_id])()
+        elif action_id in _MODE_SETTERS:
+            btn = self.aux_panel.transport.toggles.get(action_id)
+            getattr(self.aux_engine, _MODE_SETTERS[action_id])(not (btn.isChecked() if btn else False))
+        elif action_id == "media.duck":
+            on = self.aux_engine.toggle_manual_duck()
+            self.aux_panel.transport.set_ducked(on)
+        elif action_id == "media.cue":
+            pass
+
+    def _on_aux_mode_toggled(self, action_id: str, on: bool) -> None:
+        setter = _MODE_SETTERS.get(action_id)
+        if setter:
+            getattr(self.aux_engine, setter)(on)
+
+    def _on_aux_playlist_action(self, action: str, row: int) -> None:
+        model = self.aux_panel.playlist.model
+        rows = self.aux_panel.playlist.selected_rows() or ([row] if row >= 0 else [])
+        if action == "play" and row >= 0:
+            self.aux_engine.play_index(row)
+        elif action == "mark_next" and row >= 0:
+            self.aux_engine.set_next(row)
+        elif action == "cue" and row >= 0:
+            self.aux_engine.play_index(row)
+        elif action == "update_duration":
+            model.reprobe(rows)
+        elif action == "delete" and rows:
+            model.remove_rows(rows)
 
     # --------------------------------------------------------------- red (esclava)
     def _setup_network(self) -> None:
@@ -356,6 +510,55 @@ class MainWindow(QMainWindow):
         self.recorder.state_changed.connect(self._on_record_state)
         self.recorder.segment_closed.connect(self._on_segment)
         self.jarvis.delivered.connect(self._on_delivered)
+        self.onair.record_requested.connect(self._toggle_record)
+
+    # ---------------------------------------------- micrófono (auto-ducking)
+    def _setup_mic(self) -> None:
+        self.mic_ducker = None
+        self.clock.mic_clicked.connect(self._open_mic_settings)
+        self.clock.set_mic_state(False)
+        if (self.config.get("mic", {}) or {}).get("enabled"):
+            self._apply_mic()
+
+    def _open_mic_settings(self) -> None:
+        from .widgets.mic_settings import MicSettingsDialog
+        dlg = MicSettingsDialog(self.config, self)
+        if dlg.exec():
+            self.config = dlg.result_config()
+            self._apply_mic()
+
+    def _apply_mic(self) -> None:
+        """(Re)construye el micrófono según la config y lo enciende si está activo."""
+        if self.mic_ducker is not None:
+            self.mic_ducker.stop()
+            self.engine.remove_mic_voice()
+            self.mic_ducker = None
+        self.engine.set_mic_duck(False)
+        mic = (self.config.get("mic", {}) or {})
+        if not mic.get("enabled"):
+            self.clock.set_mic_state(False)
+            return
+        from ..audio.mic_ducker import MicDucker
+        self.mic_ducker = MicDucker(self.config, self)
+        self.mic_ducker.speaking_changed.connect(self._on_mic_speaking)
+        ok = self.mic_ducker.start()
+        if ok and mic.get("to_air"):
+            self.engine.add_mic_voice(self.mic_ducker.mic_source)
+        self.clock.set_mic_state(enabled=ok)
+        if ok:
+            self.statusBar().showMessage("🎙 Micrófono activo (auto-ducking).", 4000)
+        else:
+            self.statusBar().showMessage(
+                "No se pudo abrir el micrófono — revisa el dispositivo en sus ajustes.", 6000)
+
+    def _on_mic_speaking(self, speaking: bool) -> None:
+        mic = (self.config.get("mic", {}) or {})
+        self.engine.set_mic_duck(speaking, float(mic.get("duck_main", 0.30)),
+                                 float(mic.get("duck_carts", 0.50)))
+        aux = getattr(self, "aux_engine", None)
+        if aux is not None:
+            aux.set_mic_duck(speaking, float(mic.get("duck_aux", 0.40)), 1.0)
+        self.clock.set_mic_state(enabled=True, speaking=speaking)
 
     def _toggle_record(self) -> None:
         if self.recorder.is_recording():
@@ -367,6 +570,7 @@ class MainWindow(QMainWindow):
         recording = state == "recording"
         self._record_btn.setText("⏹" if recording else "⏺")
         self._record_btn.setStyleSheet("QToolButton { color: #e23b2e; }" if recording else "")
+        self.onair.set_recording(recording)
         self.statusBar().showMessage("⏺ GRABANDO" if recording else "Grabación detenida", 4000)
 
     def _on_segment(self, path: str) -> None:
@@ -428,6 +632,7 @@ class MainWindow(QMainWindow):
     def _on_state(self, state: str) -> None:
         msg = {"playing": "Reproduciendo", "paused": "En pausa", "stopped": "Detenido"}
         self.statusBar().showMessage(msg.get(state, state), 3000)
+        self.onair.set_playing_active(state == "playing")
         if state == "stopped":
             self.onair.set_remaining("00:00.0")
             self._ends_anchor = None
@@ -438,6 +643,16 @@ class MainWindow(QMainWindow):
             self.master_volume.blockSignals(True)
             self.master_volume.setValue(value)
             self.master_volume.blockSignals(False)
+
+    def _on_mode_toggled(self, action_id: str, on: bool) -> None:
+        setter = _MODE_SETTERS.get(action_id)
+        if setter:
+            getattr(self.engine, setter)(on)
+
+    def _on_engine_mode_changed(self, mode: str, on: bool) -> None:
+        action_id = _MODE_TO_ACTION.get(mode)
+        if action_id:
+            self.transport.set_mode_checked(action_id, on)
 
     def _on_cart(self, slot: int) -> None:
         if not self.engine.fire_cart(slot):
@@ -579,6 +794,11 @@ class MainWindow(QMainWindow):
         if action_id in _MEDIA_ACTIONS:
             getattr(self.engine, _MEDIA_ACTIONS[action_id])()
             return
+        if action_id in _MODE_SETTERS:   # toggles desde el menú (p. ej. "Parar tras la actual")
+            btn = self.transport.toggles.get(action_id)
+            current = btn.isChecked() if btn else False
+            getattr(self.engine, _MODE_SETTERS[action_id])(not current)
+            return
         if action_id == "media.duck":
             on = self.engine.toggle_manual_duck()
             self.transport.set_ducked(on)
@@ -667,12 +887,34 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------- menciones
     def _setup_mentions(self) -> None:
-        self.mentions_manager = MentionManager(self)
         self.mentions_manager.mention_due.connect(self._on_mention_due)
+        # Animación de deslizamiento del panel de menciones (riel izquierdo).
+        self._mentions_anim = QPropertyAnimation(self.mentions_panel, b"maximumWidth", self)
+        self._mentions_anim.setDuration(240)
+        self._mentions_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.mentions_rail.toggled.connect(self._toggle_mentions_panel)
+
+    def _toggle_mentions_panel(self, is_open: bool) -> None:
+        anim = self._mentions_anim
+        anim.stop()
+        try:
+            anim.finished.disconnect()
+        except TypeError:
+            pass
+        if is_open:
+            self.mentions_panel.setVisible(True)
+            anim.setStartValue(self.mentions_panel.maximumWidth())
+            anim.setEndValue(self.mentions_panel.PANEL_W)
+        else:
+            anim.setStartValue(self.mentions_panel.maximumWidth())
+            anim.setEndValue(0)
+            anim.finished.connect(lambda: self.mentions_panel.setVisible(False))
+        anim.start()
+        self.mentions_rail.set_open(is_open)
 
     def _on_mention_due(self, mention) -> None:
-        self._open_mentions()
-        self.mentions_window.highlight_mention(mention)
+        self._toggle_mentions_panel(True)          # despliega el panel de menciones
+        self.mentions_panel.highlight_mention(mention)
         self.statusBar().showMessage(f"📣 MENCIÓN AL AIRE: {mention.text}", 8000)
 
     # ------------------------------------------------------- opciones / log
@@ -680,11 +922,29 @@ class MainWindow(QMainWindow):
         dlg = OptionsDialog(self.config, self)
         if dlg.exec():
             self.config = dlg.result_config()
+            self._apply_audio_settings()
             QMessageBox.information(
                 self, "Opciones guardadas",
                 "Configuración guardada en config.toml.\n\n"
-                "Algunos cambios (perfil, puertos, MCP, red) se aplican al reiniciar.",
+                "El fundido, el pisador y el volumen se aplican al instante; otros "
+                "cambios (perfil, puertos, MCP, red, dispositivos) se aplican al reiniciar.",
             )
+
+    def _apply_audio_settings(self) -> None:
+        """Aplica EN VIVO los tiempos de audio (fundido/solape/pisador) a ambos motores."""
+        au = (self.config.get("audio", {}) or {})
+        for eng in (self.engine, getattr(self, "aux_engine", None)):
+            if eng is None:
+                continue
+            eng.config = self.config            # el motor VLC lee la config en vivo
+            if hasattr(eng, "crossfade_ms"):
+                eng.crossfade_ms = int(au.get("crossfade_ms", eng.crossfade_ms))
+            if hasattr(eng, "auto_crossfade_ms"):
+                eng.auto_crossfade_ms = int(au.get("auto_crossfade_ms", eng.auto_crossfade_ms))
+            if hasattr(eng, "duck_ms"):
+                eng.duck_ms = int(au.get("duck_ms", eng.duck_ms))
+            if hasattr(eng, "duck_level"):
+                eng.duck_level = float(au.get("duck_level", eng.duck_level))
 
     def _open_log_viewer(self) -> None:
         folder = (self.config.get("paths", {}) or {}).get("logs_folder", ".")
@@ -693,12 +953,8 @@ class MainWindow(QMainWindow):
         self._log_viewer.raise_()
 
     def _open_mentions(self) -> None:
-        if self.mentions_window is None:
-            self.mentions_window = MentionsWindow(self.mentions_manager, self)
-            self.mentions_window.setWindowFlag(Qt.WindowType.Window, True)
-        self.mentions_window.show()
-        self.mentions_window.raise_()
-        self.mentions_window.activateWindow()
+        # El botón 📝 y el menú abren el panel de menciones del borde izquierdo.
+        self._toggle_mentions_panel(True)
 
     # ------------------------------------------------------------- MCP (IA)
     def _setup_mcp(self) -> None:
@@ -769,6 +1025,13 @@ class MainWindow(QMainWindow):
         self.stream_encoder = StreamEncoder(self.config, self)
         self.stream_meter = StreamMeter(self.config, self)
 
+        # Animación de "deslizamiento" elegante del panel PUERTO (anima su ancho;
+        # como la ventana ya abre ancha, el área central absorbe el cambio sin
+        # mover el borde de la ventana).
+        self._stream_anim = QPropertyAnimation(self.stream_panel, b"maximumWidth", self)
+        self._stream_anim.setDuration(240)
+        self._stream_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
         self.stream_rail.toggled.connect(self._toggle_stream_panel)
         self.stream_panel.emit_requested.connect(self._stream_emit)
         self.stream_panel.stop_requested.connect(self.stream_encoder.stop)
@@ -819,7 +1082,21 @@ class MainWindow(QMainWindow):
             self.stream_receiver.set_volume(value)
 
     def _toggle_stream_panel(self, is_open: bool) -> None:
-        self.stream_panel.setVisible(is_open)
+        anim = self._stream_anim
+        anim.stop()
+        try:
+            anim.finished.disconnect()
+        except TypeError:
+            pass
+        if is_open:
+            self.stream_panel.setVisible(True)
+            anim.setStartValue(self.stream_panel.maximumWidth())
+            anim.setEndValue(self.stream_panel.PANEL_W)
+        else:
+            anim.setStartValue(self.stream_panel.maximumWidth())
+            anim.setEndValue(0)
+            anim.finished.connect(lambda: self.stream_panel.setVisible(False))
+        anim.start()
         self.stream_rail.set_open(is_open)
         self._update_meter_running()
 
@@ -874,10 +1151,14 @@ class MainWindow(QMainWindow):
                 self.stream_receiver.stop()
             if getattr(self, "stream_recv_meter", None):
                 self.stream_recv_meter.stop()
+            if getattr(self, "mic_ducker", None):
+                self.mic_ducker.stop()
             if getattr(self, "recorder", None) and self.recorder.is_recording():
                 self.recorder.stop()
             if getattr(self, "mcp_server", None):
                 self.mcp_server.stop()
+            if getattr(self, "aux_engine", None):
+                self.aux_engine.release()
             self.engine.release()
         finally:
             super().closeEvent(event)

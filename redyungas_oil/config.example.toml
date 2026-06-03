@@ -8,6 +8,11 @@
 profile = "standalone"        # "estudio" (emite) | "esclava" (recibe+failover) | "standalone"
 station_name = "Red Yungas"
 language = "es"
+currentsong_folder = ""       # carpeta de salida del fichero 'CurrentSong'
+autostart = false
+agc = false
+allow_multiple = true
+double_click_play = true
 
 [paths]
 music_root = "/home/redyungas"            # raíz del árbol de archivos
@@ -17,12 +22,31 @@ logs_folder = "/home/redyungas/RED YUNGAS OIL/logs"
 
 [audio]
 engine = "sounddevice"        # "sounddevice" (un solo grafo, sin tartamudeo al solapar) | "vlc"
-crossfade_ms = 3000           # duración del fundido (cruce) entre pistas
+crossfade_ms = 3000           # solape MANUAL (Reproducir/click derecho mientras algo suena)
+auto_crossfade_ms = 1750      # avance AUTOMÁTICO: empieza 1,75 s antes de acabar (solo automático)
 fade_in_ms = 350              # fundido de entrada suave al Reproducir / click derecho (0 = desactivado)
 duck_ms = 450                 # rapidez del pisador: bajar/subir la música de forma suave (no de golpe)
+duck_level = 0.30             # volumen al que baja la música durante la locución/pisador (0..1)
 samplerate = 44100
 blocksize = 1024              # bloque del motor sounddevice (subir si hay cortes por CPU lenta)
 output_device = ""            # "" = dispositivo de salida por defecto del SO
+
+# ---------------------------------------------------------------------------
+# Micrófono del locutor + auto-ducking (reemplaza el clima). Cuando el locutor
+# habla, baja sola la música (principal/auxiliar/cuñas) como en las radios pro.
+# Se configura desde el botón "Micrófono" (junto al reloj).
+# ---------------------------------------------------------------------------
+[mic]
+enabled = false
+device = ""                   # "" = entrada por defecto del SO
+to_air = false                # mezclar la voz en la salida (al aire)
+threshold_db = -38.0          # nivel a partir del cual se considera "hablando"
+attack_ms = 120
+release_ms = 700
+duck_main = 0.30              # nivel al que baja la planilla PRINCIPAL (0..1)
+duck_aux = 0.40               # nivel al que baja la planilla AUXILIAR (0..1)
+duck_carts = 0.50            # nivel al que bajan las CUÑAS (0..1)
+mic_gain_db = 0.0
 
 [network]
 # --- Receptor (perfil "esclava"): de dónde se escucha la señal del estudio ---

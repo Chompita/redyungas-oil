@@ -1,15 +1,16 @@
 """
-ui/widgets/lcd_clock.py — Barra de reloj + fecha + temperatura + humedad.
+ui/widgets/lcd_clock.py — Barra de reloj + fecha + MICRÓFONO del locutor.
 
 Es la franja informativa bajo el panel "Siguiente" (ver capturas). Reloj en vivo
-(QTimer cada segundo) con fecha en español, y placeholders de temperatura/humedad
-que en una fase futura se alimentarán de una fuente de clima.
+(QTimer cada segundo) con fecha en español. Donde antes estaba el clima ahora va
+el botón de **micrófono** (auto-ducking): se enciende/apaga y abre su ventana de
+ajustes. El estado encendido se ve resaltado (verde) y parpadea al detectar voz.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QDateTime, Qt, QTimer
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtCore import QDateTime, Qt, QTimer, pyqtSignal
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget
 
 _DIAS = ["lun.", "mar.", "mié.", "jue.", "vie.", "sáb.", "dom."]
 _MESES = ["ene.", "feb.", "mar.", "abr.", "may.", "jun.",
@@ -17,6 +18,8 @@ _MESES = ["ene.", "feb.", "mar.", "abr.", "may.", "jun.",
 
 
 class ClockBar(QWidget):
+    mic_clicked = pyqtSignal()        # abrir ajustes / activar el micrófono
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -37,15 +40,14 @@ class ClockBar(QWidget):
 
         layout.addStretch(1)
 
-        # Temperatura
-        self.temp_label = QLabel("🌡  0 °C")
-        self.temp_label.setObjectName("weather")
-        layout.addWidget(self.temp_label)
-
-        # Humedad
-        self.hum_label = QLabel("☁  0 %")
-        self.hum_label.setObjectName("weather")
-        layout.addWidget(self.hum_label)
+        # Botón de MICRÓFONO (en lugar del antiguo clima): abre sus ajustes y
+        # refleja el estado (apagado/encendido/hablando).
+        self.mic_btn = QToolButton()
+        self.mic_btn.setObjectName("micButton")
+        self.mic_btn.setText("🎙  Micrófono")
+        self.mic_btn.setToolTip("Entrada de micrófono y auto-ducking — clic para configurar/activar")
+        self.mic_btn.clicked.connect(self.mic_clicked)
+        layout.addWidget(self.mic_btn)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -63,6 +65,15 @@ class ClockBar(QWidget):
         h12 = h % 12 or 12
         self.time_label.setText(f"{h12}:{t.minute():02d}:{t.second():02d} {ampm}")
 
-    def set_weather(self, temp_c: float, humidity_pct: int) -> None:
-        self.temp_label.setText(f"🌡  {temp_c:.0f} °C")
-        self.hum_label.setText(f"☁  {humidity_pct} %")
+    def set_mic_state(self, enabled: bool, speaking: bool = False) -> None:
+        """Apagado=gris · encendido=verde · hablando=verde brillante."""
+        if not enabled:
+            state, txt = "off", "🎙  Micrófono"
+        elif speaking:
+            state, txt = "speaking", "🎙  AL AIRE"
+        else:
+            state, txt = "on", "🎙  Micrófono ON"
+        self.mic_btn.setText(txt)
+        self.mic_btn.setProperty("micState", state)
+        self.mic_btn.style().unpolish(self.mic_btn)
+        self.mic_btn.style().polish(self.mic_btn)

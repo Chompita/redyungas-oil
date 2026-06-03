@@ -11,8 +11,10 @@ mantiene baja hasta volver a pulsarlo (lo maneja el motor).
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QSlider, QToolButton, QWidget
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QHBoxLayout, QToolButton, QVBoxLayout, QWidget
+
+from .seek_slider import SeekSlider
 
 # (glyph, color, action_id, tooltip)
 _BUTTONS = [
@@ -26,18 +28,27 @@ _BUTTONS = [
     ("≈", "#1ea83c", "media.duck", "Fundido / pisador manual (baja la música hasta volver a pulsar)"),
 ]
 
-_RES = 1000   # resolución del slider de posición
+# Toggles por-cuña con estado visible (glyph, action_id, tooltip):
+_TOGGLES = [
+    ("🔁", "media.cyclic", "Cíclico: repite la misma cuña una y otra vez"),
+    ("🗑", "media.delete_on_play", "Borrar al reproducir: elimina la cuña al terminar"),
+    ("▶■", "media.stop_after", "Parar tras la actual: para al acabar la cuña"),
+]
 
 
 class TransportBar(QWidget):
     action_triggered = pyqtSignal(str)   # emite el action_id
     seek_requested = pyqtSignal(float)   # posición 0.0..1.0
+    mode_toggled = pyqtSignal(str, bool)  # (action_id de toggle, activo)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, stacked: bool = False) -> None:
+        """`stacked=True` pone la regleta de POSICIÓN en su PROPIA fila (debajo de los
+        botones), para paneles estrechos como la planilla auxiliar (la regleta tiene
+        todo el ancho y se puede manipular bien)."""
         super().__init__(parent)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 6, 2)
-        layout.setSpacing(4)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(4)
 
         self.buttons: dict[str, QToolButton] = {}
         for glyph, color, action_id, tip in _BUTTONS:
@@ -46,39 +57,53 @@ class TransportBar(QWidget):
             btn.setToolTip(tip)
             btn.setObjectName("transportButton")
             btn.setStyleSheet(f"QToolButton {{ color: {color}; }}")
-            btn.setMinimumSize(34, 30)
+            btn.setMinimumSize(28 if stacked else 34, 30)
+            if stacked:
+                btn.setProperty("compact", "true")
             btn.clicked.connect(lambda _=False, a=action_id: self.action_triggered.emit(a))
             self.buttons[action_id] = btn
-            layout.addWidget(btn)
+            btn_row.addWidget(btn)
 
-        layout.addSpacing(10)
-        self.slider = QSlider(Qt.Orientation.Horizontal)   # POSICIÓN de la pista
+        # --- Toggles por-cuña (estado activado/desactivado visible) ---
+        self.toggles: dict[str, QToolButton] = {}
+        for glyph, action_id, tip in _TOGGLES:
+            btn = QToolButton()
+            btn.setText(glyph)
+            btn.setToolTip(tip)
+            btn.setObjectName("transportToggle")
+            btn.setCheckable(True)
+            btn.setMinimumSize(30 if stacked else 38, 30)
+            if stacked:
+                btn.setProperty("compact", "true")
+            btn.toggled.connect(lambda on, a=action_id: self.mode_toggled.emit(a, on))
+            self.toggles[action_id] = btn
+            btn_row.addWidget(btn)
+
+        # POSICIÓN de la pista: clic = salto exacto, sin adelantar audio en vivo,
+        # y reproduce desde donde se suelta (ver seek_slider.SeekSlider).
+        self.slider = SeekSlider()
         self.slider.setObjectName("transportSlider")
-        self.slider.setRange(0, _RES)
-        self.slider.setValue(0)
-        self.slider.setToolTip("Posición de la pista (arrastra para navegar)")
-        self._seeking = False
-        self.slider.sliderPressed.connect(self._on_press)
-        self.slider.sliderReleased.connect(self._on_release)
-        layout.addWidget(self.slider, 1)
+        self.slider.seek_committed.connect(self.seek_requested)
+
+        if stacked:
+            outer = QVBoxLayout(self)
+            outer.setContentsMargins(4, 2, 6, 2)
+            outer.setSpacing(3)
+            btn_row.addStretch(1)
+            outer.addLayout(btn_row)
+            outer.addWidget(self.slider)
+        else:
+            outer = QHBoxLayout(self)
+            outer.setContentsMargins(4, 2, 6, 2)
+            outer.setSpacing(4)
+            outer.addLayout(btn_row)
+            outer.addSpacing(10)
+            outer.addWidget(self.slider, 1)
 
     # ------------------------------------------------------------------ seek
-    def _on_press(self) -> None:
-        self._seeking = True
-
-    def _on_release(self) -> None:
-        self._seeking = False
-        self.seek_requested.emit(self.slider.value() / _RES)
-
     def set_position(self, fraction: float) -> None:
         """Mueve la barra según la posición de reproducción (si el usuario no arrastra)."""
-        if self._seeking:
-            return
-        v = max(0, min(_RES, int(fraction * _RES)))
-        if v != self.slider.value():
-            self.slider.blockSignals(True)
-            self.slider.setValue(v)
-            self.slider.blockSignals(False)
+        self.slider.set_position(fraction)
 
     def set_ducked(self, on: bool) -> None:
         """Resalta el botón de pisador manual cuando está activo."""
@@ -86,3 +111,11 @@ class TransportBar(QWidget):
         if btn:
             btn.setStyleSheet("QToolButton { color: #ffffff; background: #e23b2e; }"
                               if on else "QToolButton { color: #1ea83c; }")
+
+    def set_mode_checked(self, action_id: str, checked: bool) -> None:
+        """Sincroniza el estado de un toggle desde el motor (sin re-emitir)."""
+        btn = self.toggles.get(action_id)
+        if btn and btn.isChecked() != checked:
+            btn.blockSignals(True)
+            btn.setChecked(checked)
+            btn.blockSignals(False)

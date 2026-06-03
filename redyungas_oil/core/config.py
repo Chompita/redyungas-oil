@@ -45,6 +45,14 @@ DEFAULTS: dict[str, Any] = {
         "profile": C.PROFILE_STANDALONE,   # estudio | esclava | standalone
         "station_name": "Red Yungas",
         "language": "es",
+        "currentsong_folder": "",          # carpeta de salida del fichero 'CurrentSong'
+        "autostart": False,                # activar autoarranque
+        "agc": False,                      # activar AGC
+        "allow_multiple": True,            # permitir abrir más de una instancia
+        "disable_events_secondary": True,  # desactivar eventos en instancias secundarias
+        "open_last_list": True,            # abrir la última lista al arrancar
+        "confirm_close": False,            # confirmación de cierre
+        "double_click_play": True,         # reproducir con doble clic
     },
     "paths": {
         "music_root": str(Path.home()),
@@ -58,12 +66,19 @@ DEFAULTS: dict[str, Any] = {
         # Motor de audio: "sounddevice" (un solo grafo, mezcla en numpy, sin tartamudeo
         # al solapar) o "vlc" (el clásico). En la rama audio-pro por defecto sounddevice.
         "engine": "sounddevice",
-        "crossfade_ms": C.CROSSFADE_MS,
+        "crossfade_ms": C.CROSSFADE_MS,            # solape MANUAL (Reproducir/click derecho)
+        "auto_crossfade_ms": C.AUTO_CROSSFADE_MS,  # avance AUTOMÁTICO: empieza 1,75 s antes de acabar
         "fade_in_ms": C.FADE_IN_MS,  # fundido de entrada al Reproducir/click derecho (0 = sin fundido)
         "duck_ms": C.DUCK_MS,        # rapidez del pisador (bajar/subir música suave)
         "samplerate": 44100,
         "blocksize": 1024,           # tamaño de bloque del motor sounddevice (latencia/estabilidad)
-        "output_device": "",         # "" = dispositivo por defecto del SO
+        "output_device": "",         # "" = dispositivo por defecto del SO (Salida de emisión)
+        "cue_device": "",            # salida de CUE (pre-escucha)
+        "duck_level": C.DUCK_LEVEL,  # volumen de locución del pisador (0..1)
+        "fade_on_overlap": True,     # "Fundido al solapar"
+        "fade_on_stop": True,        # "Fundido al parar"
+        "detect_end": True,          # "Detectar fin de canción"
+        "detect_end_db": -26,        # umbral del detector de fin (dB)
     },
     "network": {
         # Receptor (perfil esclava): de dónde se escucha la señal del estudio.
@@ -101,6 +116,71 @@ DEFAULTS: dict[str, Any] = {
         "website": "http://www.redyungas.com.bo",
         "description": "Hi-Fi Internet Audio",
         "connect_on_start": False,   # emitir automáticamente al arrancar
+    },
+    # --- Micrófono del locutor + auto-ducking profesional (reemplaza el clima) ---
+    # Cuando el locutor habla, baja AUTOMÁTICAMENTE la música (planilla principal,
+    # auxiliar y cuñas) como en las radios profesionales, y vuelve a subir al callar.
+    "mic": {
+        "enabled": False,
+        "device": "",                # "" = entrada por defecto del SO
+        "to_air": False,             # mezclar la voz del mic en la salida (al aire)
+        "threshold_db": -38.0,       # nivel a partir del cual se considera "hablando"
+        "attack_ms": 120,            # rapidez en bajar la música al detectar voz
+        "release_ms": 700,           # espera antes de volver a subir tras callar
+        "duck_main": 0.30,           # nivel al que baja la planilla PRINCIPAL (0..1)
+        "duck_aux": 0.40,            # nivel al que baja la planilla AUXILIAR (0..1)
+        "duck_carts": 0.50,          # nivel al que bajan las CUÑAS (0..1)
+        "mic_gain_db": 0.0,          # ganancia de la voz si se manda al aire
+    },
+    # --- Secciones del diálogo de Opciones (réplica ZaraRadio) ---
+    "silence": {                     # Detector de silencio
+        "enabled": True,
+        "period_s": 15,
+    },
+    "security": {                    # Contraseña (proteger diálogos)
+        "enabled": False,
+        "password": "",
+        "protect_events": True,
+        "discard_pending": False,
+        "play_pending_manual": False,
+        "protect_options": True,
+        "protect_enable_events": True,
+    },
+    "mixer": {                       # Aplicación mezcladora externa
+        "app": "",
+    },
+    "hth": {                         # Temperatura / Humedad para locuciones
+        "temperature": 0,
+        "humidity": 0,
+        "import_enabled": False,
+        "import_file": "",
+        "disable_after_min": 60,
+        "disable_after_enabled": False,
+        "units": "Celsius",          # Celsius | Fahrenheit
+    },
+    "dtmf": {                        # Detector de tonos DTMF
+        "enabled": False,
+        "disconnect_tones": "",
+        "disconnect_action": "Reproducir los eventos pendientes",
+        "connect_mode": "manual",    # tone | delay | manual
+        "connect_tone": "",
+        "connect_delay_s": 0,
+    },
+    "explorer": {                    # Explorador de ficheros (árbol)
+        "root": "",
+        "special_folder": "Escritorio",
+        "use_special": True,
+        "extensions": ["WAV", "MP3", "OGG", "WMA"],
+    },
+    "tags": {                        # Tags en la lista
+        "enabled": False,
+        "format": "%TITL - %ARTI",
+    },
+    "satellite": {                   # Entrada de satélite
+        "input_device": "",
+    },
+    "outputs": {                     # Salidas de reproductores auxiliares
+        "aux1": "", "aux2": "", "aux3": "", "aux4": "",
     },
     "recording": {
         "segment_seconds": C.RECORDING_SEGMENT_S,   # 30 min

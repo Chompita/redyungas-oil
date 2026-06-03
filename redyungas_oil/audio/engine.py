@@ -34,6 +34,9 @@ class AudioEngine(QObject):
     position_changed = pyqtSignal(float, float)    # restante_seg, total_seg
     levels_changed = pyqtSignal(float, float)
     state_changed = pyqtSignal(str)                # playing/paused/stopped/pausa
+    cart_started = pyqtSignal(int)                 # slot de cuña que arranca
+    cart_finished = pyqtSignal(int)                # slot de cuña que terminó/silenció
+    playout_mode_changed = pyqtSignal(str, bool)   # ("cyclic"|"delete_on_play"|"stop_after", activo)
 
     def __init__(self, config: dict, model=None, parent=None) -> None:
         super().__init__(parent)
@@ -45,6 +48,13 @@ class AudioEngine(QObject):
         self._active = 0
         self._carts = [self._vlc.media_player_new() for _ in range(C.CARTWALL_SLOTS)]
         self._cart_paths: list[str | None] = [None] * C.CARTWALL_SLOTS
+        self._cart_active = [False] * C.CARTWALL_SLOTS   # estado para el toggle/UI
+        self._cart_volume_pct = 100                      # volumen general de cuñas 0..100
+        self._cyclic = False            # Cíclico: repite la misma cuña
+        self._delete_on_play = False    # Borrar al reproducir: la elimina al terminar
+        self._stop_after = False        # Parar tras la actual: para al acabar
+        self._mic_ducking = False       # mic del locutor activo
+        self._mic_deck_level = 1.0
         self._pisador = self._vlc.media_player_new()
 
         self.current_index = -1
@@ -352,14 +362,97 @@ class AudioEngine(QObject):
         return self._cart_paths[slot] if 0 <= slot < len(self._cart_paths) else None
 
     def fire_cart(self, slot: int) -> bool:
+        """Toggle: 1er clic dispara; 2º clic silencia (no reproduce de nuevo)."""
         path = self.cart_path(slot)
         if not path:
             return False
         cart = self._carts[slot]
+        if self._cart_active[slot] and cart.is_playing():
+            cart.stop()
+            self._cart_active[slot] = False
+            self.cart_finished.emit(slot)
+            return True
         cart.set_media(self._vlc.media_new(path))
-        cart.audio_set_volume(self._volume)
+        cart.audio_set_volume(self._cart_volume_pct)
         cart.play()
+        self._cart_active[slot] = True
+        self.cart_started.emit(slot)
         return True
+
+    def fade_all_carts(self) -> None:
+        """Fundido/parada general de todas las cuñas activas."""
+        for slot, cart in enumerate(self._carts):
+            if self._cart_active[slot]:
+                cart.stop()
+                self._cart_active[slot] = False
+                self.cart_finished.emit(slot)
+
+    def set_cart_volume(self, value: int) -> None:
+        """Volumen general de las cuñas (0..100); afecta a las activas y futuras."""
+        self._cart_volume_pct = max(0, min(100, int(value)))
+        for slot, cart in enumerate(self._carts):
+            if self._cart_active[slot]:
+                cart.audio_set_volume(self._cart_volume_pct)
+
+    def _poll_carts(self) -> None:
+        """Detecta cuñas que terminaron solas para apagar su resaltado en la UI."""
+        for slot, cart in enumerate(self._carts):
+            if self._cart_active[slot] and not cart.is_playing():
+                self._cart_active[slot] = False
+                self.cart_finished.emit(slot)
+
+    # --------------------------------------------------- modos por-cuña (toggles)
+    def set_cyclic(self, on: bool) -> None:
+        self._cyclic = bool(on)
+        self.playout_mode_changed.emit("cyclic", self._cyclic)
+
+    def set_delete_on_play(self, on: bool) -> None:
+        self._delete_on_play = bool(on)
+        self.playout_mode_changed.emit("delete_on_play", self._delete_on_play)
+
+    def set_stop_after(self, on: bool) -> None:
+        self._stop_after = bool(on)
+        self.playout_mode_changed.emit("stop_after", self._stop_after)
+
+    # ----------------------------------------------------- micrófono / auto-duck
+    def set_mic_duck(self, active: bool, deck_level: float = _DUCK_LEVEL,
+                     carts_level: float = 1.0) -> None:
+        self._mic_ducking = bool(active)
+        self._mic_deck_level = float(deck_level)
+        base = _DUCK_LEVEL if (self._manual_duck or self._auto_pisador) else 1.0
+        target = min(base, self._mic_deck_level) if active else base
+        self._set_duck_target(target)
+        cart_vol = int(round((carts_level if active else 1.0) * self._cart_volume_pct))
+        for slot, cart in enumerate(self._carts):
+            if self._cart_active[slot]:
+                cart.audio_set_volume(max(0, min(100, cart_vol)))
+
+    def add_mic_voice(self, source) -> None:   # to_air solo en el motor sounddevice
+        return
+
+    def remove_mic_voice(self) -> None:
+        return
+
+    def _handle_end(self) -> None:
+        items = self._items()
+        finished = self.current_index
+        if self._stop_after:
+            self.set_stop_after(False)
+            self.stop()
+            return
+        if self._cyclic and 0 <= finished < len(items):
+            self.play_index(finished)
+            return
+        nxt = self._next_to_play()
+        if self._delete_on_play and 0 <= finished < len(items) and self.model:
+            self.model.remove_rows([finished])
+            if nxt > finished:
+                nxt -= 1
+            items = self._items()
+        if 0 <= nxt < len(items):
+            self.play_index(nxt)
+        else:
+            self.stop()
 
     # --------------------------------------------------- pisador / locuciones
     def play_voiceover(self, path: str) -> bool:
@@ -411,7 +504,8 @@ class AudioEngine(QObject):
         self._crossfading = True
         self._pending_index = next_i
         self._pending_title = title
-        duration = int((self.config.get("audio", {}) or {}).get("crossfade_ms", C.CROSSFADE_MS))
+        duration = int((self.config.get("audio", {}) or {}).get(
+            "auto_crossfade_ms", C.AUTO_CROSSFADE_MS))
         self._xfade = CrossfadeController(self._player(), other, duration,
                                           target_volume=self._target_volume(), parent=self)
         self._xfade.finished.connect(self._finish_crossfade)
@@ -451,6 +545,7 @@ class AudioEngine(QObject):
     # -------------------------------------------------------------------- poll
     def _poll(self) -> None:
         self._update_ducking()
+        self._poll_carts()
         if self._crossfading:
             self._update_vu(True)
             return
@@ -466,14 +561,12 @@ class AudioEngine(QObject):
             self.position_changed.emit(remaining, total)
             self._enforce_volume()        # auto-cura: el entrante a veces queda mudo
             self._update_vu(True)
-            self._maybe_crossfade(total, remaining)
+            # En modos especiales (cíclico/borrar/parar) se resuelve al fin natural.
+            if not (self._cyclic or self._stop_after or self._delete_on_play):
+                self._maybe_crossfade(total, remaining)
         elif state == vlc.State.Ended:
             self._update_vu(False)
-            nxt = self._next_to_play()
-            if 0 <= nxt < len(self._items()):
-                self.play_index(nxt)
-            else:
-                self.stop()
+            self._handle_end()
         else:
             self._update_vu(False)
 
@@ -499,7 +592,9 @@ class AudioEngine(QObject):
                 self._set_duck_target(1.0)   # sube la música SUAVE al acabar la voz
 
     def _maybe_crossfade(self, total: float, remaining: float) -> None:
-        cf = int((self.config.get("audio", {}) or {}).get("crossfade_ms", C.CROSSFADE_MS)) / 1000.0
+        # Lead del avance AUTOMÁTICO: 1,75 s antes de acabar (solo automático).
+        cf = int((self.config.get("audio", {}) or {}).get(
+            "auto_crossfade_ms", C.AUTO_CROSSFADE_MS)) / 1000.0
         if cf <= 0 or self._paused or total <= cf or remaining > cf:
             return
         nxt = self._next_to_play()

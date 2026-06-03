@@ -12,7 +12,7 @@ from __future__ import annotations
 # Identidad / branding  (el "disfraz" cambia ZaraRadio -> REDYUNGAS OIL)
 # ---------------------------------------------------------------------------
 APP_NAME = "REDYUNGAS OIL"
-APP_VERSION = "1.4.0"           # v1.4 — motor de audio de UN SOLO GRAFO (sounddevice+numpy) por defecto: crossfade/solape sin tartamudeo, pisador/fade sample-accurate, VU real. (v1.3: equal-power VLC, sin ventanas consola, splash)
+APP_VERSION = "1.5.0"           # v1.5 — UX ZaraRadio++: panel "Al aire" (parpadeo+grabación), planilla AUXILIAR (>1) simultánea, regleta de posición (seek al soltar), cartwall (toggle/teclas/fundido/volumen), botones Cíclico/Borrar/Parar-tras-actual, PUERTO legible+animado, MICRÓFONO con auto-ducking, riel de MENCIONES, Opciones estilo ZaraRadio, crossfade auto 1,75 s. (v1.4: motor sounddevice un solo grafo)
 APP_TITLE_DEFAULT = "Sin título 1"   # equivalente a "SinTítulo1" de ZaraRadio
 ORG_NAME = "Red Yungas"
 
@@ -161,7 +161,8 @@ STREAM_GAIN_MAX_DB = 48.0
 RECONNECT_TIMEOUT_S = 15         # reintento de reconexión al caer la señal
 SILENCE_TIMEOUT_S = 7            # silencio antes de saltar a emergencia
 RECORDING_SEGMENT_S = 1800       # corte de grabación cada 30 minutos
-CROSSFADE_MS = 3000              # duración del fundido por defecto
+CROSSFADE_MS = 3000              # duración del solape MANUAL (Reproducir/click derecho mientras algo suena)
+AUTO_CROSSFADE_MS = 1750         # el avance AUTOMÁTICO empieza 1,75 s antes de acabar el jingle (solo automático)
 FADE_IN_MS = 350                 # fundido de entrada suave al iniciar una pista (Reproducir/click derecho)
 DUCK_MS = 450                    # tiempo del pisador para bajar/subir la música (suave, no de golpe)
 DUCK_LEVEL = 0.30                # nivel al que baja la música con el pisador (0.0..1.0)

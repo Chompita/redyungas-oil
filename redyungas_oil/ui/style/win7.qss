@@ -33,10 +33,31 @@ QToolBar#mainToolbar QToolButton:hover {
 /* ---- Etiquetas de sección (gris pequeño) ---- */
 QLabel#sectionTag { color: #6a6a6a; font-size: 8pt; }
 
-/* ---- Badge rojo "Reproduciendo ahora" ---- */
+/* ---- Badge "Reproduciendo ahora": neutro en reposo, VERDE al sonar ---- */
 QLabel#badgePlaying {
-    background-color: #e23b2e; color: #ffffff; font-size: 8pt;
-    padding: 1px 6px; border-radius: 2px;
+    background-color: #e4e4e4; color: #6a6a6a; font-size: 8pt; font-weight: bold;
+    border: 1px solid #c4c4c4; padding: 1px 6px; border-radius: 2px;
+}
+QLabel#badgePlayingOn {
+    background-color: #1ea83c; color: #ffffff; font-size: 8pt; font-weight: bold;
+    border: 1px solid #14672a; padding: 1px 6px; border-radius: 2px;
+}
+/* ---- Badge "Grabando": neutro en reposo (el parpadeo rojo se aplica en vivo) ---- */
+QLabel#badgeRecord {
+    background-color: #e4e4e4; color: #8a8a8a; font-size: 8pt; font-weight: bold;
+    border: 1px solid #c4c4c4; padding: 1px 6px; border-radius: 2px;
+}
+/* ---- Botón de grabación (punto rojo): vistoso al estar activo ---- */
+QToolButton#recordDot {
+    color: #b0b0b0; font-size: 13pt; font-weight: bold;
+    border: 1px solid #bdbdbd; border-radius: 3px; padding: 0 3px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfdfd, stop:1 #ececec);
+}
+QToolButton#recordDot:hover { background: #ffecec; border-color: #e08a8a; color: #e10000; }
+QToolButton#recordDot:checked {
+    color: #ffffff;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ff4a3a, stop:1 #c01000);
+    border: 1px solid #7d1f14;
 }
 
 /* ---- Displays de título (recuadro blanco hundido) ---- */
@@ -61,10 +82,23 @@ QLabel#lcdSmall {
     border: 1px solid #0c3a0c; border-radius: 2px; padding: 0 6px;
 }
 
-/* ---- Reloj + clima ---- */
+/* ---- Reloj + botón de micrófono (antes clima) ---- */
 QLabel#clockDate { color: #303030; font-size: 9pt; }
 QLabel#clockTime { color: #101010; font-size: 14pt; font-weight: bold; }
-QLabel#weather { color: #303030; font-size: 10pt; }
+QToolButton#micButton {
+    color: #303030; font-size: 9pt; font-weight: bold; padding: 4px 12px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfdfd, stop:1 #e9e9e9);
+    border: 1px solid #bdbdbd; border-radius: 4px;
+}
+QToolButton#micButton:hover { background: #eaf4ff; border-color: #9cc6ef; }
+QToolButton#micButton[micState="on"] {
+    color: #ffffff; border: 1px solid #14672a;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2faf4a, stop:1 #1d8f38);
+}
+QToolButton#micButton[micState="speaking"] {
+    color: #ffffff; border: 1px solid #0f5020;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5ff07f, stop:1 #1ea83c);
+}
 
 /* ---- Lista y tablas ---- */
 QLabel#durTotal { color: #303030; font-size: 8pt; }
@@ -89,7 +123,19 @@ QPushButton#cartButton {
     text-align: left; padding: 2px 6px; color: #555555; font-size: 8pt;
 }
 QPushButton#cartButton:hover { background: #eef6ff; border-color: #9cc6ef; }
+/* Estado ACTIVO: la cuña está sonando (resaltado verde, se ve encendido). */
+QPushButton#cartButton[active="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3fd45f, stop:1 #1ea83c);
+    border: 1px solid #14672a; color: #ffffff; font-weight: bold;
+}
 QSpinBox#cartBank { border: 1px solid #b0b0b0; }
+QToolButton#cartFadeAll {
+    font-size: 12pt; font-weight: bold; color: #1ea83c;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfdfd, stop:1 #ececec);
+    border: 1px solid #bdbdbd; border-radius: 3px; padding: 0 6px;
+}
+QToolButton#cartFadeAll:hover { background: #eafaef; border-color: #7fdc97; }
+QToolButton#cartFadeAll:pressed { background: #d6f3df; }
 
 /* ---- Transporte ---- */
 QToolButton#transportButton {
@@ -101,6 +147,22 @@ QToolButton#transportButton {
 QToolButton#transportButton:hover { background: #eaf4ff; border-color: #9cc6ef; }
 QToolButton#transportButton:pressed { background: #d6e9fb; }
 QFrame#transportSep { color: #c4c4c4; }
+
+/* ---- Toggles por-cuña (Cíclico / Borrar al reproducir / Parar tras la actual) ---- */
+QToolButton#transportToggle {
+    font-size: 11pt;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfdfd, stop:1 #ececec);
+    border: 1px solid #bdbdbd; border-radius: 3px;
+}
+QToolButton#transportToggle:hover { background: #eaf4ff; border-color: #9cc6ef; }
+/* ACTIVADO: estado claramente visible (ámbar encendido). */
+QToolButton#transportToggle:checked {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffd24a, stop:1 #f0a000);
+    border: 1px solid #b87400; color: #3a2600;
+}
+/* Modo compacto (planilla auxiliar): fuentes más pequeñas para que entren los glifos. */
+QToolButton#transportButton[compact="true"] { font-size: 11pt; }
+QToolButton#transportToggle[compact="true"] { font-size: 9pt; }
 
 QSlider#transportSlider::groove:horizontal,
 QSlider#masterVolume::groove:vertical {
@@ -114,7 +176,30 @@ QSlider::handle {
     border: 1px solid #1c5894; border-radius: 2px;
 }
 QSlider#transportSlider::handle:horizontal { width: 12px; margin: -5px 0; }
-QSlider#masterVolume::handle:vertical { height: 12px; margin: 0 -5px; }
+
+/* ---- Sliders de VOLUMEN en VERDE estético (principal / aux / cuñas) ---- */
+QSlider#masterVolume::groove:vertical {
+    background: #dfe7df; border: 1px solid #7fae87; border-radius: 3px; width: 7px;
+}
+QSlider#auxVolume::groove:horizontal,
+QSlider#cartVolume::groove:horizontal {
+    background: #dfe7df; border: 1px solid #7fae87; border-radius: 3px; height: 7px;
+}
+QSlider#masterVolume::sub-page:vertical,
+QSlider#auxVolume::sub-page:horizontal,
+QSlider#cartVolume::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3fd45f, stop:1 #1ea83c);
+    border: 1px solid #14672a; border-radius: 3px;
+}
+QSlider#masterVolume::handle:vertical,
+QSlider#auxVolume::handle:horizontal,
+QSlider#cartVolume::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7af09a, stop:1 #1ea83c);
+    border: 1px solid #0f5020; border-radius: 3px;
+}
+QSlider#masterVolume::handle:vertical { height: 14px; margin: 0 -6px; }
+QSlider#auxVolume::handle:horizontal,
+QSlider#cartVolume::handle:horizontal { width: 14px; margin: -6px 0; }
 
 /* ---- Branding y barra de estado ---- */
 QLabel#brandLogo { font-size: 11pt; font-weight: bold; color: #b30000; padding: 0 6px; }
@@ -125,24 +210,79 @@ QLabel#secondaryCopy {
 QStatusBar { background-color: #e8e8e8; }
 QLabel#statusTime { color: #303030; font-family: "Consolas", monospace; padding: 0 8px; }
 
-/* ---- Panel emisor "PUERTO" (estilo Opticodec) ---- */
+/* ==========================================================================
+   Panel de MENCIONES (riel izquierdo desplegable).
+   ========================================================================== */
+QWidget#mentionsPanel {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6ef, stop:1 #d8ece0);
+    border-right: 2px solid #1f7a52;
+}
+QLabel#mentionsBanner {
+    color: #ffffff; font-size: 12pt; font-weight: bold; letter-spacing: 2px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1f7a52, stop:1 #11503a);
+    border: 1px solid #0d3f2d; border-radius: 3px; padding: 3px 10px;
+}
+QLabel#mentionsHint { color: #2a5142; font-size: 8pt; }
+QFrame#mentionsSep { color: #1f7a52; background: #1f7a52; max-height: 1px; }
+
+/* ---- Botón >1 de la planilla auxiliar (toolbar) ---- */
+QToolButton#auxToolButton {
+    font-weight: bold; font-size: 10pt; padding: 1px 6px; border-radius: 3px;
+}
+QToolButton#auxToolButton:checked {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5aa0e0, stop:1 #2a6fb5);
+    color: #ffffff; border: 1px solid #1c5894;
+}
+
+/* ==========================================================================
+   Planilla AUXILIAR "Aux 1" (panel desplegable de la derecha).
+   ========================================================================== */
+QWidget#auxPanel {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eef2f6, stop:1 #dde6ee);
+    border-left: 2px solid #2a6fb5;
+}
+QLabel#auxBanner {
+    color: #ffffff; font-size: 12pt; font-weight: bold; letter-spacing: 1px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2a6fb5, stop:1 #1c5894);
+    border: 1px solid #154a7e; border-radius: 3px; padding: 2px 10px;
+}
+QLabel#auxNow { color: #1a3550; font-size: 9pt; font-weight: bold; }
+QToolButton#auxClose { font-size: 11pt; font-weight: bold; color: #1c5894; }
+QToolButton#auxClose:hover { background: #cfe0f2; border-radius: 3px; }
+
+/* ==========================================================================
+   Panel emisor "PUERTO" (estilo Opticodec) — rediseño legible y bonito.
+   Fondo azul marino profundo (a juego con el riel PUERTO), banner de marca rojo
+   con texto blanco bien contrastado y etiquetas claras (antes casi no se veían).
+   ========================================================================== */
 QWidget#streamPanel {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4a4a, stop:1 #3a3a3a);
-    border-left: 1px solid #1b3e60;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #173a59, stop:1 #0e2336);
+    border-left: 2px solid #2c5d8f;
 }
 QFrame#streamBanner {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7a2f8f, stop:1 #4a2f8f);
-    border: 1px solid #2a1740; border-radius: 3px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #d11f2a, stop:1 #7c1117);
+    border: 1px solid #5a0c10; border-radius: 4px;
 }
-QLabel#streamBannerTitle { color: #ffffff; font-size: 15pt; font-weight: bold; letter-spacing: 1px; }
-QLabel#streamBannerSub { color: #d9c7ff; font-size: 8pt; letter-spacing: 3px; }
-QLabel#streamInfo { color: #dcdcdc; font-size: 8pt; }
-QLabel#streamUrl { color: #9fd0ff; font-size: 8pt; }
-QLabel#streamFoot { color: #9a9a9a; font-size: 7pt; font-style: italic; }
-QLabel#streamStatusOff  { color: #c9c9c9; font-size: 9pt; font-weight: bold; }
-QLabel#streamStatusOn   { color: #3ad14c; font-size: 9pt; font-weight: bold; }
-QLabel#streamStatusWarn { color: #f4b400; font-size: 9pt; font-weight: bold; }
-QWidget#streamPanel QLabel#sectionTag { color: #cdcdcd; font-size: 8pt; }
+/* Por defecto: TODA etiqueta del panel es texto claro y SIN fondo (si no, el
+   fondo gris global #f0f0f0 tapaba el texto). Las reglas específicas de abajo se
+   cualifican con #streamPanel para ganar en especificidad y conservar su color. */
+QWidget#streamPanel QLabel { color: #e6eef6; background: transparent; }
+#streamPanel QLabel#streamBannerTitle {
+    color: #ffffff; font-size: 16pt; font-weight: bold; letter-spacing: 1px;
+}
+#streamPanel QLabel#streamBannerSub { color: #ffe1e1; font-size: 8pt; font-weight: bold; letter-spacing: 3px; }
+#streamPanel QLabel#streamInfo { color: #d8e8f7; font-size: 8pt; font-weight: bold; }
+#streamPanel QLabel#streamUrl { color: #8fd2ff; font-size: 8pt; }
+QLineEdit#streamUrl {
+    color: #eaf4ff; background: #0a1a29; border: 1px solid #2c5d8f;
+    border-radius: 3px; padding: 3px 5px; font-size: 8pt;
+}
+#streamPanel QLabel#streamFoot { color: #8fa8bf; font-size: 7pt; font-style: italic; }
+#streamPanel QLabel#streamStatusOff  { color: #cdd9e6; font-size: 9pt; font-weight: bold; }
+#streamPanel QLabel#streamStatusOn   { color: #45e25a; font-size: 9pt; font-weight: bold; }
+#streamPanel QLabel#streamStatusWarn { color: #ffc02e; font-size: 9pt; font-weight: bold; }
+#streamPanel QLabel#sectionTag { color: #a9c6e0; font-size: 8pt; font-weight: bold; }
+QFrame#streamSep { color: #2c5d8f; background: #2c5d8f; max-height: 1px; }
 QLabel#gainReadout {
     color: #28e23a; background: #061a06; border: 1px solid #0c3a0c; border-radius: 2px;
     font-family: "Consolas", monospace; font-size: 8pt; padding: 1px 3px;

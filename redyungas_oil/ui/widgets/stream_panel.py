@@ -101,10 +101,17 @@ class StreamPanel(QWidget):
     recv_stop = pyqtSignal()             # detener la escucha
     recv_volume = pyqtSignal(int)        # volumen del receptor 0..100
 
+    PANEL_W = 300   # ancho del panel desplegado (lo anima MainWindow)
+
     def __init__(self, config: dict, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("streamPanel")
-        self.setFixedWidth(286)
+        # Necesario para que el fondo del QSS (azul marino) se PINTE en un QWidget
+        # subclaseado (si no, queda transparente y el texto claro no se lee).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Ancho animable: el panel "se desliza" cambiando su maximumWidth (0..PANEL_W).
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(self.PANEL_W)
         st = (config.get("stream", {}) or {})
         self._gain = float(st.get("gain_db", 0.0))
 
