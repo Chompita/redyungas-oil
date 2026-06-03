@@ -1013,8 +1013,31 @@ class MainWindow(QMainWindow):
 
     def _on_update_applied(self, ok: bool, message: str) -> None:
         self.statusBar().showMessage(message, 8000)
-        icon = QMessageBox.information if ok else QMessageBox.warning
-        icon(self, "Actualización", message)
+        if ok:
+            resp = QMessageBox.question(
+                self, "Actualización",
+                f"{message}\n\n¿Reiniciar REDYUNGAS OIL ahora para aplicar la nueva versión?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if resp == QMessageBox.StandardButton.Yes:
+                self._restart_app()
+        else:
+            QMessageBox.warning(self, "Actualización", message)
+
+    def _restart_app(self) -> None:
+        """Cierra recursos y RE-LANZA el proceso para cargar la versión nueva."""
+        import os
+        import sys
+        self._shutdown_resources()
+        try:
+            if getattr(sys, "frozen", False):           # .exe empaquetado
+                os.execv(sys.executable, [sys.executable])
+            else:                                        # clon git: python -m redyungas_oil
+                os.execv(sys.executable, [sys.executable, "-m", "redyungas_oil"])
+        except Exception:
+            # Si el re-exec falla, al menos cerrar para que el operador reabra.
+            self.close()
 
     # ------------------------------------------------- emisor "PUERTO" (stream)
     def _setup_stream(self) -> None:
@@ -1137,28 +1160,33 @@ class MainWindow(QMainWindow):
             self.config = dlg.result_config()
             self.stream_encoder.reconfigure(self.config)
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def _shutdown_resources(self) -> None:
+        """Detiene motores, red, grabación, MCP, mic, etc. (cierre o reinicio)."""
+        for attr, method in (("failover", "stop"), ("encoder", "stop"),
+                             ("stream_encoder", "stop"), ("stream_meter", "stop"),
+                             ("stream_receiver", "stop"), ("stream_recv_meter", "stop"),
+                             ("mic_ducker", "stop"), ("mcp_server", "stop")):
+            obj = getattr(self, attr, None)
+            if obj is not None:
+                try:
+                    getattr(obj, method)()
+                except Exception:
+                    pass
         try:
-            if getattr(self, "failover", None):
-                self.failover.stop()
-            if getattr(self, "encoder", None):
-                self.encoder.stop()
-            if getattr(self, "stream_encoder", None):
-                self.stream_encoder.stop()
-            if getattr(self, "stream_meter", None):
-                self.stream_meter.stop()
-            if getattr(self, "stream_receiver", None):
-                self.stream_receiver.stop()
-            if getattr(self, "stream_recv_meter", None):
-                self.stream_recv_meter.stop()
-            if getattr(self, "mic_ducker", None):
-                self.mic_ducker.stop()
             if getattr(self, "recorder", None) and self.recorder.is_recording():
                 self.recorder.stop()
-            if getattr(self, "mcp_server", None):
-                self.mcp_server.stop()
-            if getattr(self, "aux_engine", None):
-                self.aux_engine.release()
-            self.engine.release()
+        except Exception:
+            pass
+        for eng_attr in ("aux_engine", "engine"):
+            eng = getattr(self, eng_attr, None)
+            if eng is not None:
+                try:
+                    eng.release()
+                except Exception:
+                    pass
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        try:
+            self._shutdown_resources()
         finally:
             super().closeEvent(event)

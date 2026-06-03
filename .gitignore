@@ -18,6 +18,10 @@ dist/
 build/
 *.spec.bak
 
+# --- Instalador: binarios grandes que descarga el operador (NO al repo) ---
+installer/payload/
+installer/Output/
+
 # --- Sistema ---
 .DS_Store
 Thumbs.db
