@@ -1,12 +1,12 @@
 # ============================================================================
 #  REDYUNGAS OIL — bootstrap de instalación (lo llama el instalador Inno Setup).
-#  Clona el repo privado, crea el venv, instala dependencias y deja config.toml.
-#  La AUTOACTUALIZACIÓN posterior la hace la propia app (git fetch + reset --hard).
+#  Clona el repo PÚBLICO (sin credenciales), crea el venv, instala dependencias
+#  y deja config.toml. La AUTOACTUALIZACIÓN la hace la app (git fetch + reset --hard).
 #
 #  Uso (lo invoca redyungas_oil.iss; también se puede a mano):
 #    powershell -ExecutionPolicy Bypass -File bootstrap.ps1 `
 #       -InstallDir "C:\Program Files\RedYungasOil" `
-#       -RepoUrl "https://<TOKEN_READONLY>@github.com/Chompita/redyungas-oil.git" `
+#       -RepoUrl "https://github.com/Chompita/redyungas-oil.git" `
 #       -Branch master `
 #       -PythonExe "C:\Program Files\RedYungasOil\python\python.exe" `
 #       -GitExe "C:\Program Files\RedYungasOil\tools\git\cmd\git.exe"
@@ -35,10 +35,8 @@ if (Test-Path (Join-Path $repo ".git")) {
     Log "Clonando el repositorio…"
     if (Test-Path $repo) { Remove-Item $repo -Recurse -Force }
     & $GitExe clone --branch $Branch --depth 50 $RepoUrl $repo
-    if ($LASTEXITCODE -ne 0) { throw "git clone falló (¿credencial/token correcto y con acceso de lectura?)" }
+    if ($LASTEXITCODE -ne 0) { throw "git clone falló (¿hay internet? el repo es público, no necesita credenciales)" }
 }
-# Cachear las credenciales del remoto para el self-update de la app.
-& $GitExe -C $repo config credential.helper store | Out-Null
 
 # 2) Crear el venv e instalar dependencias.
 if (-not (Test-Path (Join-Path $venv "Scripts\python.exe"))) {

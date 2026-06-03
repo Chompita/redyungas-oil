@@ -1,9 +1,14 @@
 # REDYUNGAS OIL — Instalador todo‑en‑uno (Windows) + autoactualización
 
 Instalador **un‑clic** que deja cada PC con todo lo necesario y se **autoactualiza**
-cuando subimos funciones nuevas (sin re‑instalar). Estrategia elegida por el operador:
-**Inno Setup + git** (la app corre desde un clon del repo y se actualiza con
-`git fetch + reset --hard`, ver `redyungas_oil/core/updater.py`).
+cuando subimos funciones nuevas (sin re‑instalar). Estrategia: **Inno Setup + git**
+(la app corre desde un clon del repo y se actualiza con `git fetch + reset --hard`,
+ver `redyungas_oil/core/updater.py`).
+
+> **El repositorio es PÚBLICO** (`github.com/Chompita/redyungas-oil`): **no hace falta
+> ningún token ni credencial** en las PCs. Clonar y actualizar funciona solo. Por eso
+> los secretos reales (contraseña del stream, IPs, etc.) **NO** están en el repo: van
+> únicamente en el `config.toml` de cada máquina (ignorado por git).
 
 > El instalador hay que **compilarlo en Windows** (Inno Setup no corre en Linux). Aquí
 > están todos los scripts ya listos; solo falta poner 4 binarios y pulsar *Compile*.
@@ -13,7 +18,7 @@ cuando subimos funciones nuevas (sin re‑instalar). Estrategia elegida por el o
 ## 1. Qué hace el instalador
 1. Instala **VLC** (silencioso) y **Python 3.11** (dentro de `…\RedYungasOil\python`).
 2. Copia **git portátil (MinGit)** y **ffmpeg/ffprobe** a `…\RedYungasOil\tools`.
-3. Pide un **token de SOLO LECTURA** del repo privado y **clona** el repositorio.
+3. **Clona** el repositorio público (sin pedir credenciales).
 4. Crea el **venv** e instala las dependencias (`pip install -r requirements.txt`).
 5. Deja un **`config.toml`** inicial (desde el ejemplo) en el clon.
 6. Crea **accesos directos** (Escritorio + Inicio/autoarranque) que arrancan la app
@@ -26,14 +31,9 @@ cambió** y, si hay dependencias nuevas, `pip install`. Luego ofrece **Reiniciar
 
 ---
 
-## 2. Preparar la credencial (una vez)
-El repo es privado → cada PC necesita leer el repo. Crea un **fine‑grained PAT**
-(GitHub → Settings → Developer settings → *Fine‑grained tokens*) con:
-- Repository access: solo `Chompita/redyungas-oil`.
-- Permissions → **Contents: Read‑only**.
-
-Ese token se pega en el instalador (queda cacheado en el clon para el self‑update).
-No lo subas al repo. (Un deploy key SSH también vale; entonces usa la URL `git@…`.)
+## 2. Credenciales
+**Ninguna.** El repo es público → el instalador clona y actualiza sin token. (Si algún
+día se vuelve privado, habría que añadir un PAT read‑only; hoy NO hace falta.)
 
 ---
 
@@ -61,7 +61,7 @@ Descarga y coloca en `installer\payload\` (renombrando a estos nombres exactos):
 
 ## 5. Desplegar en una esclava
 1. Copia `RedYungasOil-Setup.exe` a la PC (por Tailscale/USB) y ejecútalo como admin.
-2. Pega el **token de solo lectura** y confirma la URL cuando lo pida.
+2. (No pide credenciales: el repo es público.)
 3. Al terminar, edita `…\RedYungasOil\repo\config.toml` (perfil `estudio`/`esclava`,
    `[stream]`, `[network]`, `[telegram]`, `[mcp]`, micrófono `[mic]`…) — hay un acceso
    directo "Editar configuración" en el menú Inicio.
@@ -91,8 +91,7 @@ es intencional, para no perder trabajo. Usa git a mano allí.)
 ---
 
 ## 8. Notas
-- El self‑update necesita que el clon tenga la credencial cacheada (lo deja el bootstrap
-  con `credential.helper store`). Si rota el token, vuelve a clonar o re‑guarda la credencial.
+- El self‑update no necesita credenciales (repo público): `git fetch + reset --hard`.
 - VLC/ffmpeg quedan disponibles; el lanzador añade `tools\git\cmd` y `tools\ffmpeg` al PATH
   del proceso para que el updater (git) y el audio (ffmpeg) los encuentren.
 - Alternativa "sin Python/git en el PC" (.exe empaquetado + GitHub Releases) NO es esta vía;

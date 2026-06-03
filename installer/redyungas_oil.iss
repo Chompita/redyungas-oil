@@ -62,9 +62,9 @@ Filename: "{tmp}\vlc-setup.exe"; Parameters: "/S"; StatusMsg: "Instalando VLC…
 Filename: "{tmp}\python-setup.exe"; \
   Parameters: "/quiet InstallAllUsers=0 PrependPath=0 Include_pip=1 Include_test=0 TargetDir=""{app}\python"""; \
   StatusMsg: "Instalando Python…"; Flags: waituntilterminated
-; 3) Bootstrap: clona el repo, crea el venv, instala deps y deja config.toml.
+; 3) Bootstrap: clona el repo PÚBLICO (sin credenciales), crea el venv, instala deps y deja config.toml.
 Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\bootstrap.ps1"" -InstallDir ""{app}"" -RepoUrl ""{code:CloneUrl}"" -Branch master -PythonExe ""{app}\python\python.exe"" -GitExe ""{app}\tools\git\cmd\git.exe"""; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\bootstrap.ps1"" -InstallDir ""{app}"" -RepoUrl ""{#MyRepoDefault}"" -Branch master -PythonExe ""{app}\python\python.exe"" -GitExe ""{app}\tools\git\cmd\git.exe"""; \
   StatusMsg: "Descargando y configurando REDYUNGAS OIL…"; Flags: runhidden waituntilterminated
 ; 4) Lanzar la app al terminar (opcional).
 Filename: "wscript.exe"; Parameters: """{app}\run_redyungas_oil.vbs"""; \
@@ -82,45 +82,5 @@ Type: filesandordirs; Name: "{app}\repo"
 Type: filesandordirs; Name: "{app}\venv"
 Type: filesandordirs; Name: "{app}\python"
 
-[Code]
-var
-  TokenPage: TInputQueryWizardPage;
-
-procedure InitializeWizard();
-begin
-  TokenPage := CreateInputQueryPage(wpSelectDir,
-    'Credencial del repositorio',
-    'Acceso de SOLO LECTURA al repositorio privado',
-    'Pega un token de GitHub de SOLO LECTURA (fine-grained PAT con permiso de lectura ' +
-    'sobre el repo, o un deploy key como token) y confirma la URL del repositorio. ' +
-    'Se usa para clonar y para las actualizaciones (queda cacheado en el clon).');
-  TokenPage.Add('Token (solo lectura):', True);
-  TokenPage.Add('URL del repositorio:', False);
-  TokenPage.Values[1] := '{#MyRepoDefault}';
-end;
-
-function CloneUrl(Param: String): String;
-var
-  token, url: String;
-begin
-  token := Trim(TokenPage.Values[0]);
-  url := Trim(TokenPage.Values[1]);
-  if (token <> '') and (Pos('https://', url) = 1) then
-    Result := 'https://' + token + '@' + Copy(url, 9, Length(url) - 8)
-  else
-    Result := url;
-end;
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-  if CurPageID = TokenPage.ID then
-  begin
-    if Trim(TokenPage.Values[0]) = '' then
-    begin
-      MsgBox('Falta el token de solo lectura para poder clonar el repositorio privado.',
-             mbError, MB_OK);
-      Result := False;
-    end;
-  end;
-end;
+; El repositorio es PÚBLICO: no se necesita token ni credencial. El bootstrap
+; clona directamente {#MyRepoDefault} y la app se autoactualiza por git sin más.
