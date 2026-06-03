@@ -25,3 +25,4 @@ installer/Output/
 # --- Sistema ---
 .DS_Store
 Thumbs.db
+CHECKPOINTS/

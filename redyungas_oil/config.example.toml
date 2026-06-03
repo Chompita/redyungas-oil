@@ -75,7 +75,7 @@ host = "stream.example.com"
 port = 8032
 mount = "/stream"             # solo lo usa Icecast2; SHOUTcast autentica por contraseña
 user = "source"
-password = ""                 # p. ej. ***REMOVED*** — NO subir a git
+password = ""                 # (ponla en config.toml; NUNCA en el repo)
 bitrate = 128                 # kbps
 codec = "mp3"                 # "mp3" (compatible) | "aac" (LC). HE-AAC pide libfdk_aac.
 sample_rate = 44100
@@ -126,7 +126,7 @@ token = ""
 [telegram]
 enabled = false
 bot_token = ""                # token del bot (p. ej. MARCUS)
-chat_id = ""                  # p. ej. operador ***REMOVED***
+chat_id = ""                  # p. ej. el chat_id del operador
 
 [jarvis]
 enabled = false

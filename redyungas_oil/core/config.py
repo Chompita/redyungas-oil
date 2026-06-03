@@ -212,7 +212,7 @@ DEFAULTS: dict[str, Any] = {
     "telegram": {
         "enabled": False,
         "bot_token": "",             # token del bot MARCUS (o el que se use)
-        "chat_id": "",               # ej. operador ***REMOVED***
+        "chat_id": "",               # ej. el chat_id del operador
     },
     "jarvis": {
         "enabled": False,
