@@ -1,9 +1,9 @@
 # REDYUNGAS OIL
 
-Automatización radial para la red **Red Yungas** (10 PCs por Tailscale: 1 estudio +
+Automatización radial para la red  (10 PCs por Tailscale: 1 estudio +
 9 esclavas Windows). Por fuera es un **clon visual de ZaraRadio v1.6.2** (look
 Windows 7) para que locutores y periodistas no sufran curva de aprendizaje; por
-dentro es un backend moderno **controlable por IA vía MCP** y Telegram (MARCUS).
+dentro es un backend moderno **controlable por IA vía MCP** y Telegram
 
 > Repositorio **privado** de uso interno. Reemplaza a ZaraRadio (playout) y a
 > Orban Opticodec-PC (emisor de stream).
