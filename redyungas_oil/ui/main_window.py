@@ -511,6 +511,8 @@ class MainWindow(QMainWindow):
         self.recorder.segment_closed.connect(self._on_segment)
         self.jarvis.delivered.connect(self._on_delivered)
         self.onair.record_requested.connect(self._toggle_record)
+        self.onair.stop_requested.connect(self.recorder.stop)
+        self.onair.rec_options_requested.connect(self._open_recording_settings)
 
     # ---------------------------------------------- micrófono (auto-ducking)
     def _setup_mic(self) -> None:
@@ -561,17 +563,34 @@ class MainWindow(QMainWindow):
         self.clock.set_mic_state(enabled=True, speaking=speaking)
 
     def _toggle_record(self) -> None:
-        if self.recorder.is_recording():
-            self.recorder.stop()
+        """Grabar/Pausar/Reanudar con el mismo botón (mismo archivo)."""
+        if self.recorder.is_active():
+            self.recorder.toggle_pause()
         else:
             self.recorder.start()
 
+    def _open_recording_settings(self) -> None:
+        from .widgets.recording_settings import RecordingSettingsDialog
+        dlg = RecordingSettingsDialog(self.config, self)
+        if dlg.exec():
+            self.config = dlg.result_config()
+            self.recorder.reconfigure(self.config)
+            self.statusBar().showMessage("Opciones de grabación guardadas.", 4000)
+
     def _on_record_state(self, state: str) -> None:
-        recording = state == "recording"
-        self._record_btn.setText("⏹" if recording else "⏺")
-        self._record_btn.setStyleSheet("QToolButton { color: #e23b2e; }" if recording else "")
-        self.onair.set_recording(recording)
-        self.statusBar().showMessage("⏺ GRABANDO" if recording else "Grabación detenida", 4000)
+        self.onair.set_record_state(state)
+        if state == "recording":
+            self._record_btn.setText("❚❚")
+            self._record_btn.setStyleSheet("QToolButton { color: #e23b2e; }")
+            self.statusBar().showMessage("⏺ GRABANDO", 4000)
+        elif state == "paused":
+            self._record_btn.setText("▶")
+            self._record_btn.setStyleSheet("QToolButton { color: #c87f00; }")
+            self.statusBar().showMessage("⏸ Grabación en pausa (mismo archivo)", 4000)
+        else:  # stopped
+            self._record_btn.setText("⏺")
+            self._record_btn.setStyleSheet("")
+            self.statusBar().showMessage("Grabación finalizada", 4000)
 
     def _on_segment(self, path: str) -> None:
         name = Path(path).name
@@ -1047,6 +1066,9 @@ class MainWindow(QMainWindow):
 
         self.stream_encoder = StreamEncoder(self.config, self)
         self.stream_meter = StreamMeter(self.config, self)
+        # "Al aire" SOLO parpadea si el PUERTO emite o recibe (si no, estático).
+        self._air_emitting = False
+        self._air_receiving = False
 
         # Animación de "deslizamiento" elegante del panel PUERTO (anima su ancho;
         # como la ventana ya abre ancha, el área central absorbe el cambio sin
@@ -1084,6 +1106,7 @@ class MainWindow(QMainWindow):
         cfg = {"network": {"stream_url": url}}
         self.stream_receiver = StreamReceiver(cfg, self)
         self.stream_receiver.health_changed.connect(self.stream_panel.set_recv_status)
+        self.stream_receiver.health_changed.connect(self._on_recv_health)
         self.stream_receiver.set_volume(self.stream_panel.recv_vol.value())
         self.stream_receiver.start()
         # VU real del stream recibido (ffmpeg astats sobre la URL).
@@ -1099,6 +1122,8 @@ class MainWindow(QMainWindow):
             self.stream_recv_meter.stop()
             self.stream_recv_meter = None
         self.stream_panel.set_recv_status("stopped")
+        self._air_receiving = False
+        self._update_air()
 
     def _recv_volume(self, value: int) -> None:
         if self.stream_receiver is not None:
@@ -1150,8 +1175,18 @@ class MainWindow(QMainWindow):
                "reconnecting": "⚠️ Stream interrumpido — reconectando…",
                "stopped": "Emisión de stream detenida"}
         self.statusBar().showMessage(msg.get(state, state), 4000)
+        self._air_emitting = state in ("emitting", "reconnecting")
+        self._update_air()
         if state == "stopped":
             self._update_meter_running()
+
+    def _on_recv_health(self, health: str) -> None:
+        self._air_receiving = (health == "on_air")
+        self._update_air()
+
+    def _update_air(self) -> None:
+        """'Al aire' parpadea solo si el PUERTO emite o recibe señal."""
+        self.onair.set_air_active(self._air_emitting or self._air_receiving)
 
     def _open_stream_settings(self) -> None:
         from .widgets.stream_settings import StreamSettingsDialog

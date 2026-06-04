@@ -1,110 +1,175 @@
 """
-audio/recorder.py — Grabación de la transmisión con segmentación (FASE 6).
+audio/recorder.py — Grabación de audio con PAUSA/REANUDAR en el MISMO archivo.
 
-Graba el "bus de programa" (lo que sale al aire = monitor del sink, igual que el
-emisor) con ffmpeg y el muxer `segment`, cerrando un MP3 nuevo cada
-`recording.segment_seconds` (30 min por defecto). Cada vez que un segmento se
-cierra emite `segment_closed(path)`; la ventana principal lo entrega a JARVIS
-(integrations/jarvis_adapter.py) para transcripción + diarización.
+Graba el "bus de programa" (lo que sale al aire) con ffmpeg. Flujo pedido por el
+operador, con TRES controles:
 
-    ffmpeg -f <fmt> -i <captura> -f segment -segment_time 1800 -reset_timestamps 1 \
-           -strftime 1 -c:a libmp3lame -b:a 192k "grab_%Y%m%d_%H%M%S.mp3"
+* **Grabar / Pausar-Reanudar** (un solo botón): el 1er clic empieza; el siguiente
+  PAUSA (sin cortar el archivo final); el siguiente REANUDA en el MISMO archivo.
+* **Detener**: termina la grabación y deja **un único archivo** (`grab_<fecha>.<ext>`).
+* **Opciones**: carpeta de salida, formato (mp3 por defecto) y calidad.
 
-Los segmentos se nombran con su marca de tiempo (orden cronológico = orden léxico).
-Un segmento se considera CERRADO cuando ffmpeg ya abrió el siguiente, o al detener.
+Implementación: cada tramo entre pausas se graba en una parte temporal
+(`<final>.partN.<ext>`); al **Detener** se **concatenan** (sin re-codificar) en el
+archivo final → resulta UN archivo, sin huecos de silencio por las pausas. Al cerrar
+emite `segment_closed(final)` para que JARVIS lo reciba (transcripción) como antes.
 """
 
 from __future__ import annotations
 
 import logging
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from ..core import proc
 from .capture import resolve_input
 
 log = logging.getLogger("redyungas_oil.recorder")
 
-_WATCH_MS = 1000
+# Formato -> (extensión, args de códec para ffmpeg). 'q' = bitrate kbps (lossy).
+_FORMATS = {
+    "mp3":  ("mp3",  lambda q: ["-c:a", "libmp3lame", "-b:a", f"{q}k"]),
+    "wav":  ("wav",  lambda q: ["-c:a", "pcm_s16le"]),
+    "ogg":  ("ogg",  lambda q: ["-c:a", "libvorbis", "-b:a", f"{q}k"]),
+    "aac":  ("m4a",  lambda q: ["-c:a", "aac", "-b:a", f"{q}k"]),
+    "flac": ("flac", lambda q: ["-c:a", "flac"]),
+}
 
 
 class Recorder(QObject):
-    state_changed = pyqtSignal(str)      # "recording" | "stopped"
-    segment_closed = pyqtSignal(str)     # ruta de un segmento ya cerrado
+    state_changed = pyqtSignal(str)      # "recording" | "paused" | "stopped"
+    segment_closed = pyqtSignal(str)     # ruta del archivo final ya cerrado
 
     def __init__(self, config: dict, parent=None) -> None:
         super().__init__(parent)
-        rec = (config.get("recording", {}) or {})
-        self.segment_seconds = int(rec.get("segment_seconds", 1800))
-        self.bitrate = int(rec.get("bitrate", 192))
-        self.fmt, self.device = resolve_input(config)
-        self.folder = Path((config.get("paths", {}) or {}).get("recordings_folder", "grabaciones"))
-
+        self._config = config
+        self.reconfigure(config)
         logs_folder = (config.get("paths", {}) or {}).get("logs_folder", ".")
         self._log_path = Path(logs_folder) / "recorder_ffmpeg.log"
         self._proc: subprocess.Popen | None = None
-        self._preexisting: set[str] = set()
-        self._appeared: list[str] = []
-        self._delivered: set[str] = set()
-        self._watch = QTimer(self)
-        self._watch.timeout.connect(self._tick)
+        self._state = "stopped"
+        self._parts: list[Path] = []      # partes del archivo final (una por tramo)
+        self._final: Path | None = None   # archivo final de la sesión
 
+    def reconfigure(self, config: dict) -> None:
+        """Relee carpeta/formato/calidad (lo llama la ventana de opciones)."""
+        self._config = config
+        rec = (config.get("recording", {}) or {})
+        self.bitrate = int(rec.get("bitrate", 192))
+        fmt = str(rec.get("format", "mp3")).lower()
+        self.fmt_name = fmt if fmt in _FORMATS else "mp3"
+        self.fmt, self.device = resolve_input(config)
+        self.folder = Path((config.get("paths", {}) or {}).get("recordings_folder", "grabaciones"))
+
+    # --------------------------------------------------------------- estado
     def is_recording(self) -> bool:
-        return self._proc is not None and self._proc.poll() is None
+        return self._state == "recording"
+
+    def is_paused(self) -> bool:
+        return self._state == "paused"
+
+    def is_active(self) -> bool:
+        return self._state in ("recording", "paused")
+
+    def state(self) -> str:
+        return self._state
 
     # --------------------------------------------------------------- ciclo
     def start(self) -> None:
-        if self.is_recording():
+        if self.is_active():
             return
         self.folder.mkdir(parents=True, exist_ok=True)
-        self._preexisting = set(self._current_files())
-        self._appeared = []
-        self._delivered = set()
-        cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "warning",
-            "-f", self.fmt, "-i", self.device,
-            "-f", "segment", "-segment_time", str(self.segment_seconds),
-            "-reset_timestamps", "1", "-strftime", "1",
-            "-c:a", "libmp3lame", "-b:a", f"{self.bitrate}k",
-            str(self.folder / "grab_%Y%m%d_%H%M%S.mp3"),
-        ]
-        self._log_path.parent.mkdir(parents=True, exist_ok=True)
-        logf = open(self._log_path, "ab")
-        self._proc = proc.popen(cmd, stdout=subprocess.DEVNULL, stderr=logf)
-        log.info("Grabando (segmentos de %s s) en %s", self.segment_seconds, self.folder)
-        self._watch.start(_WATCH_MS)
+        ext, _ = _FORMATS.get(self.fmt_name, _FORMATS["mp3"])
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._final = self.folder / f"grab_{stamp}.{ext}"
+        self._parts = []
+        self._start_part()
+        self.state_changed.emit("recording")
+
+    def toggle_pause(self) -> None:
+        """Pausa si está grabando; reanuda si está en pausa (mismo archivo)."""
+        if self._state == "recording":
+            self.pause()
+        elif self._state == "paused":
+            self.resume()
+
+    def pause(self) -> None:
+        if self._state != "recording":
+            return
+        self._stop_part()
+        self._state = "paused"
+        self.state_changed.emit("paused")
+
+    def resume(self) -> None:
+        if self._state != "paused":
+            return
+        self._start_part()
         self.state_changed.emit("recording")
 
     def stop(self) -> None:
-        self._watch.stop()
+        if not self.is_active():
+            return
+        self._stop_part()
+        self._state = "stopped"
+        final = self._finalize()
+        self.state_changed.emit("stopped")
+        if final and final.exists():
+            log.info("Grabación finalizada: %s", final.name)
+            self.segment_closed.emit(str(final))
+
+    # --------------------------------------------------------------- interno
+    def _start_part(self) -> None:
+        ext, codec_args = _FORMATS.get(self.fmt_name, _FORMATS["mp3"])
+        part = self.folder / f"{self._final.stem}.part{len(self._parts) + 1}.{ext}"
+        self._parts.append(part)
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+               "-f", self.fmt, "-i", self.device, *codec_args(self.bitrate), str(part)]
+        self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        logf = open(self._log_path, "ab")
+        self._proc = proc.popen(cmd, stdout=subprocess.DEVNULL, stderr=logf)
+        self._state = "recording"
+
+    def _stop_part(self) -> None:
         if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
             try:
+                self._proc.terminate()
                 self._proc.wait(timeout=4)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+            except Exception:
+                pass
         self._proc = None
-        # El último segmento (el que estaba escribiéndose) ahora está cerrado.
-        self._tick(final=True)
-        self.state_changed.emit("stopped")
 
-    # --------------------------------------------------------------- interno
-    def _current_files(self) -> list[str]:
-        if not self.folder.is_dir():
-            return []
-        return sorted(str(p) for p in self.folder.glob("grab_*.mp3"))
-
-    def _tick(self, final: bool = False) -> None:
-        for f in self._current_files():
-            if f not in self._preexisting and f not in self._appeared:
-                self._appeared.append(f)
-        # Todos los aparecidos menos el último siguen escribiéndose -> los previos están cerrados.
-        # Al detener (final=True), también el último se considera cerrado.
-        closed = self._appeared if final else self._appeared[:-1]
-        for f in closed:
-            if f not in self._delivered and Path(f).exists():
-                self._delivered.add(f)
-                log.info("Segmento cerrado: %s", Path(f).name)
-                self.segment_closed.emit(f)
+    def _finalize(self) -> Path | None:
+        """Une las partes en UN solo archivo final (sin re-codificar)."""
+        parts = [p for p in self._parts if p.exists() and p.stat().st_size > 0]
+        final = self._final
+        self._parts = []
+        self._final = None
+        if not parts or final is None:
+            return None
+        if len(parts) == 1:
+            parts[0].replace(final)
+            return final
+        listfile = final.with_suffix(final.suffix + ".concat.txt")
+        listfile.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+               "-f", "concat", "-safe", "0", "-i", str(listfile), "-c", "copy", str(final)]
+        try:
+            r = proc.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+            if r.returncode == 0:
+                for p in parts:
+                    p.unlink(missing_ok=True)
+                listfile.unlink(missing_ok=True)
+                return final
+        except Exception as exc:
+            log.warning("No se pudo concatenar la grabación: %s", exc)
+        # Si falla la unión, al menos conserva la primera parte como final.
+        try:
+            parts[0].replace(final)
+        except Exception:
+            return parts[0]
+        return final

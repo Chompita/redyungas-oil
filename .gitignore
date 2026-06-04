@@ -26,3 +26,9 @@ installer/Output/
 .DS_Store
 Thumbs.db
 CHECKPOINTS/
+
+# --- Carpetas de imágenes de referencia (NO al repo público) ---
+zararadio_screenshots/
+opticode_screenshots_Y_PAGINA_DEL_SERVER_STREAMING/
+imagenes_OIL/
+IMAGENES_RED_YUNGAS/

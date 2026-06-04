@@ -165,13 +165,13 @@ class OptionsDialog(QDialog):
         w, lay = self._pane("Fundido")
         lay.addWidget(QLabel("Tiempos del fundido encadenado entre canciones."))
         g1 = QGroupBox("Superposición"); f1 = QFormLayout(g1)
-        f1.addRow("Solapar pistas:", self._spin("audio", "auto_crossfade_ms", 0, 30,
-                                                "segundos", scale=1000.0, double=True, default=1.75))
+        f1.addRow("Solapar pistas (automático):", self._spin("audio", "auto_crossfade_ms", 0, 30,
+                                                "segundos", scale=1000.0, double=True, default=1.25))
         lay.addWidget(g1)
         g2 = QGroupBox("Fundido"); f2 = QVBoxLayout(g2)
         ff = QFormLayout()
-        ff.addRow("Fundir pistas:", self._spin("audio", "crossfade_ms", 0, 30,
-                                               "segundos", scale=1000.0, double=True, default=3))
+        ff.addRow("Fundir pistas (manual):", self._spin("audio", "crossfade_ms", 0, 30,
+                                               "segundos", scale=1000.0, double=True, default=2))
         f2.addLayout(ff)
         f2.addWidget(self._check("Fundido al solapar", "audio", "fade_on_overlap"))
         f2.addWidget(self._check("Fundido al parar", "audio", "fade_on_stop"))

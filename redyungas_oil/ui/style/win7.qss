@@ -47,17 +47,25 @@ QLabel#badgeRecord {
     background-color: #e4e4e4; color: #8a8a8a; font-size: 8pt; font-weight: bold;
     border: 1px solid #c4c4c4; padding: 1px 6px; border-radius: 2px;
 }
-/* ---- Botón de grabación (punto rojo): vistoso al estar activo ---- */
-QToolButton#recordDot {
-    color: #b0b0b0; font-size: 13pt; font-weight: bold;
-    border: 1px solid #bdbdbd; border-radius: 3px; padding: 0 3px;
+/* ---- Controles de grabación: grabar/pausar (recordDot) · detener · opciones ---- */
+QToolButton#recordDot, QToolButton#recordStop, QToolButton#recordOpts {
+    color: #707070; font-size: 12pt; font-weight: bold;
+    border: 1px solid #bdbdbd; border-radius: 3px; padding: 0 5px;
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfdfd, stop:1 #ececec);
 }
-QToolButton#recordDot:hover { background: #ffecec; border-color: #e08a8a; color: #e10000; }
-QToolButton#recordDot:checked {
-    color: #ffffff;
+QToolButton#recordDot:hover, QToolButton#recordStop:hover, QToolButton#recordOpts:hover {
+    background: #eaf4ff; border-color: #9cc6ef;
+}
+QToolButton#recordStop:disabled { color: #c0c0c0; }
+/* Grabando: punto/botón en ROJO vistoso. En pausa: ámbar. */
+QToolButton#recordDot { color: #c01000; }
+QToolButton#recordDot[recState="recording"] {
+    color: #ffffff; border: 1px solid #7d1f14;
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ff4a3a, stop:1 #c01000);
-    border: 1px solid #7d1f14;
+}
+QToolButton#recordDot[recState="paused"] {
+    color: #ffffff; border: 1px solid #8a5a00;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffb43a, stop:1 #c87f00);
 }
 
 /* ---- Displays de título (recuadro blanco hundido) ---- */
@@ -185,11 +193,17 @@ QSlider#auxVolume::groove:horizontal,
 QSlider#cartVolume::groove:horizontal {
     background: #dfe7df; border: 1px solid #7fae87; border-radius: 3px; height: 7px;
 }
-QSlider#masterVolume::sub-page:vertical,
+/* Relleno VERDE: horizontales = a la izquierda; VERTICAL principal = ABAJO
+   (en Qt/Fusion el sub-page del vertical sale ARRIBA, por eso el principal usa
+   add-page para que el verde quede abajo y lo normal arriba). */
 QSlider#auxVolume::sub-page:horizontal,
-QSlider#cartVolume::sub-page:horizontal {
+QSlider#cartVolume::sub-page:horizontal,
+QSlider#masterVolume::add-page:vertical {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3fd45f, stop:1 #1ea83c);
     border: 1px solid #14672a; border-radius: 3px;
+}
+QSlider#masterVolume::sub-page:vertical {
+    background: #dfe7df; border: 1px solid #7fae87; border-radius: 3px;
 }
 QSlider#masterVolume::handle:vertical,
 QSlider#auxVolume::handle:horizontal,

@@ -22,8 +22,8 @@ logs_folder = "/home/redyungas/RED YUNGAS OIL/logs"
 
 [audio]
 engine = "sounddevice"        # "sounddevice" (un solo grafo, sin tartamudeo al solapar) | "vlc"
-crossfade_ms = 3000           # solape MANUAL (Reproducir/click derecho mientras algo suena)
-auto_crossfade_ms = 1750      # avance AUTOMÁTICO: empieza 1,75 s antes de acabar (solo automático)
+crossfade_ms = 2000           # transición/solape MANUAL (configurable en Opciones->Fundido)
+auto_crossfade_ms = 1250      # avance AUTOMÁTICO: empieza 1,25 s antes de acabar (configurable en Opciones->Fundido)
 fade_in_ms = 350              # fundido de entrada suave al Reproducir / click derecho (0 = desactivado)
 duck_ms = 450                 # rapidez del pisador: bajar/subir la música de forma suave (no de golpe)
 duck_level = 0.30             # volumen al que baja la música durante la locución/pisador (0..1)
